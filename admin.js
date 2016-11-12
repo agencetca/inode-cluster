@@ -67,8 +67,10 @@ if(config['third-part-servers']) {
 }
 
 if (!config.type || config.type === 'cluster') { 
+
     isCluster = true;
     isServer = false;
+
     target_dir = '.';//Obsolete?
     if(config.name) cluster_name = config.name;
     while (!cluster_name){
@@ -83,6 +85,7 @@ if (!config.type || config.type === 'cluster') {
         if (err) throw(err);
     });
 
+<<<<<<< HEAD
 } else if (config.type === 'module') { 
     isServer = true;
     isModule = true;
@@ -106,11 +109,21 @@ if (!config.type || config.type === 'cluster') {
 } else if (config.type === 'server') { 
     isServer = true;
     isCluster = true;
+=======
+>>>>>>> f06837992004adc922be0304fa099858ce9e554f
 } else {
+
     isCluster = false;
-    isServer = false;
-    console.log('Type "'.yellow+config.type.yellow+'" is not supported.'.yellow,'Abort'.red);
-    return;
+    isServer = true;
+
+    if (config.type === 'picoservice') { 
+        isPicoService = true;
+    } else if (config.type === 'application') { 
+        isApplication = true;
+    } else { 
+        console.log('Type "'.yellow+config.type.yellow+'" is not supported.'.yellow,'Abort'.red);
+        return;
+    } 
 }
 
 if(isCluster) {
@@ -120,14 +133,18 @@ if(isCluster) {
         "Stop the cluster",
         "Select a server"
         ]);
-}
-
-if(isServer) {
+} else if(isPicoService) {
     choice_menu = choice_menu.concat([
-        "Add a third-part-server",
-        "Add a middleware",
-        "Add a local route",
-        "Add a remote route"
+        "Add the interface",
+        "Add a local functionality",
+        "Expose a local functionality (api)",
+        "Expose a remote functionality",
+        "Build a third-part-server"
+    ]);
+} else if(isApplication) {
+    choice_menu = choice_menu.concat([
+        "Add the interface",
+        "Link picoservice"
     ]);
 }
 
@@ -660,7 +677,7 @@ function main() {
 
                 break;
 
-            case 'Add a third-part-server':
+            case 'Build a third-part-server':
 
                 var third_part_server = [
                 {
@@ -737,7 +754,7 @@ function main() {
 
                 break;
 
-            case 'Add a middleware':
+            case 'Add a local functionality':
 
                 var middleware = [
                 {
@@ -816,7 +833,7 @@ function main() {
 
                 break;
 
-            case 'Add a local route':
+            case 'Expose a local functionality (api)':
 
                 if (!fs.existsSync(target_dir+'/middlewares/')) {
                     console.log('Create a middleware first'.red);
@@ -928,7 +945,7 @@ function main() {
 
                 break;
 
-            case 'Add a remote route':
+            case 'Expose a remote functionality':
 
                 var _route = {};
 
