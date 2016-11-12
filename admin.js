@@ -1,3 +1,5 @@
+//v0.2
+
 var inquirer = require('inquirer');
 var jsonfile = require('jsonfile')
 var mkdirp = require('mkdirp');
