@@ -83,9 +83,9 @@ if (!config.type || config.type === 'cluster') {
         if (err) throw(err);
     });
 
-} else if (config.type === 'microservice') { 
+} else if (config.type === 'module') { 
     isServer = true;
-    isMicroService = true;
+    isModule = true;
     isCluster = false;
 } else if (config.type === 'link') { 
     isServer = true;
