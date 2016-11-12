@@ -27,7 +27,7 @@ const github = {
 if(process.argv[2] === 'save') {
     var message = process.argv[3] || 'various (automated)';
     exec('git add . && git commit -m "'+message+'" && git push -u origin master', (err, stdout, stderr) => {
-        if(err) console.log(err);
+        if(err) console.log(err.code);
     });
     return;
 }
