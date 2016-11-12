@@ -12,6 +12,7 @@ const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
+const emptyDir = require('empty-dir');
 
 const github = {
     "url": "https://github.com/agencetca",
@@ -547,9 +548,6 @@ function main() {
                         }
 
                         if(resp.static === 'true') {
-                            mkdirp(target_dir+'/'+resp['static-root'], function(err) { 
-                                if (err) throw err;
-                            });
                             while (!validUrl.isUri(resp['static-app-url']) && resp['static-app-url'] !== ''){
                                 resp['static-app-url'] = promptSync('?'.green+' Static app Github url: '.bold.white);
                             }
@@ -573,8 +571,18 @@ function main() {
                                                         if(err) console.error(err);
                                                         console.log(colors.green('Inode '+resp.name+' has been installed!'));
                                                         if(resp.static) {
-                                                            console.log(colors.yellow('Interface is activated and served from directory "'+
-                                                                        _config['static-root']+'"'));
+                                                            var interface_msg = 'Interface is activated.';
+                                                            emptyDir(_config['static-root'], function (err, result) {
+                                                                if (err) {
+                                                                    console.error(err);
+                                                                } else {
+                                                                    interface_msg += 'Place client-side files into : "'+_config['static-root']+'".';
+                                                                }
+
+                                                                console.log(colors.yellow(interface_msg));
+
+                                                            });
+
                                                         } else {
                                                             console.log(colors.yellow('Interface is deactivated'));
                                                         }
@@ -614,14 +622,17 @@ function main() {
                                         _config['static-content-enabled'] = resp.static;
 
                                         if(_config['static-content-enabled'] === 'true') {
-                                            //_config['static-root'] = path.normalize(target_dir+'/servers/'+resp.name+'/static');
+
                                             _config['static-root'] = 'static';
                                             _config['static-entry-point'] = 'index.html';
+
+                                            mkdirp(target_dir+'/servers/'+resp.name+'/'+_config['static-root'], function(err) { 
+                                                if (err) throw err;
+                                            });
                                         } 
                                         if(resp['static-app-url']) {
                                             _config['static-origin'] = resp['static-app-url'];
                                             var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/'+_config['static-root']);
-                                            //exec('git clone '+_config["static-origin"]+' '+_config["static-root"], (error, stdout, stderr) => {
                                             exec('git clone '+_config["static-origin"]+' '+static_abs_path, (error, stdout, stderr) => {
                                                         if(error) throw(error);
                                                         var fflag=0;
