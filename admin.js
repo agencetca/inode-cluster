@@ -377,6 +377,12 @@ function main() {
 
             case 'Start the cluster':
 
+                if(run[config.name].length) {
+                    console.log(colors.yellow('Already running.'));
+                    main();
+                    return;
+                }
+
                 var timer = 0;
 
                 for(var serv in config.servers) {
