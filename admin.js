@@ -105,10 +105,10 @@ if (!config.type || config.type === 'cluster') {
 
 if(isCluster) {
     choice_menu = choice_menu.concat([
-        "Add a server (node)",
+        "Add a node",
         "Start the cluster",
         "Stop the cluster",
-        "Select a server"
+        "Inspect a node"
         ]);
 } else if(isPicoService) {
     choice_menu = choice_menu.concat([
@@ -190,7 +190,7 @@ function main() {
     }]).then(function (answers) {
         switch(answers.options) {
 
-            case 'Select a server':
+            case 'Inspect a node':
 
                 if(!config.servers || !Object.keys(config.servers).length) {
                     console.log('No servers available'.red);
@@ -380,7 +380,7 @@ function main() {
             case 'Start the cluster':
 
                 if(run[config.name].length) {
-                    console.log(colors.yellow('Already running.'));
+                    console.log(colors.yellow('The Cluster is already running.'));
                     main();
                     return;
                 }
@@ -421,6 +421,12 @@ function main() {
 
             case 'Stop the cluster':
 
+                if(!run[config.name].length) {
+                    console.log(colors.yellow('The Cluster is already stopped.'));
+                    main();
+                    return;
+                }
+
                 while(run[config.name].length) {
                     exec('kill '+run[config.name].shift(), (err, stdout, stderr) => {
                         //if(err) throw(err);
@@ -436,7 +442,7 @@ function main() {
 
                 break;
 
-            case 'Add a server (node)':
+            case 'Add a node':
 
                 var _config = {};
 
