@@ -109,7 +109,7 @@ if(isCluster) {
         ]);
 } else if(isPicoService) {
     choice_menu = choice_menu.concat([
-        "Add the interface",
+        "Activate interface",
         "Add a local functionality",
         "Expose a local functionality (api)",
         "Expose a remote functionality",
@@ -117,7 +117,7 @@ if(isCluster) {
     ]);
 } else if(isApplication) {
     choice_menu = choice_menu.concat([
-        "Add the interface",
+        "Activate interface",
         "Link picoservice"
     ]);
 }
