@@ -531,7 +531,7 @@ function main() {
                             {
                                 type: 'input',
                                 name: 'static',
-                                message: 'Enable static content?* [true|false]',
+                                message: 'Activate interface?* [true|false]',
                                 validate: function(str){
                                     if (str === 'true' || str === 'false') {
                                         return true;
@@ -547,7 +547,10 @@ function main() {
                         }
 
                         if(resp.static === 'true') {
-                            while (!resp['static-app-url']){
+                            mkdirp(target_dir+'/'+resp['static-root'], function(err) { 
+                                if (err) throw err;
+                            });
+                            while (!validUrl.isUri(resp['static-app-url']) && resp['static-app-url'] !== ''){
                                 resp['static-app-url'] = promptSync('?'.green+' Static app Github url: '.bold.white);
                             }
                             if (!validUrl.isUri(resp['static-app-url'])){
@@ -569,6 +572,12 @@ function main() {
                                                     (error, stdout, stderr) => {
                                                         if(err) console.error(err);
                                                         console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                                        if(resp.static) {
+                                                            console.log(colors.yellow('Interface is activated and served from directory "'+
+                                                                        _config['static-root']+'"'));
+                                                        } else {
+                                                            console.log(colors.yellow('Interface is deactivated'));
+                                                        }
                                                         main();
                                                     });
                                         });
@@ -611,7 +620,7 @@ function main() {
                                         } 
                                         if(resp['static-app-url']) {
                                             _config['static-origin'] = resp['static-app-url'];
-                                            var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/static');
+                                            var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/'+_config['static-root']);
                                             //exec('git clone '+_config["static-origin"]+' '+_config["static-root"], (error, stdout, stderr) => {
                                             exec('git clone '+_config["static-origin"]+' '+static_abs_path, (error, stdout, stderr) => {
                                                         if(error) throw(error);
