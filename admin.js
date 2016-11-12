@@ -72,7 +72,7 @@ if (!config.type || config.type === 'cluster') {
     target_dir = '.';//Obsolete?
     if(config.name) cluster_name = config.name;
     while (!cluster_name){
-        cluster_name = promptSync('?'.green+' Cluster detected. Name it:* '.bold.white);
+        cluster_name = promptSync('?'.green+' New Cluster detected. Name it:* '.bold.white);
         if(config && cluster_name) config.name = cluster_name;
     }
 
@@ -83,10 +83,27 @@ if (!config.type || config.type === 'cluster') {
         if (err) throw(err);
     });
 
-} else if (config.type === 'server') { 
+} else if (config.type === 'microservice') { 
     isServer = true;
+    isMicroService = true;
     isCluster = false;
-} else if (config.type === 'hybrid') { 
+} else if (config.type === 'link') { 
+    isServer = true;
+    isLink = true;
+    isCluster = false;
+} else if (config.type === 'router') { 
+    isServer = true;
+    isRouter = true;
+    isCluster = false;
+} else if (config.type === 'esb') { 
+    isServer = true;
+    isEsb = true;
+    isCluster = false;
+} else if (config.type === 'interface') { 
+    isServer = true;
+    isInterface = true;
+    isCluster = false;
+} else if (config.type === 'server') { 
     isServer = true;
     isCluster = true;
 } else {
