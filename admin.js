@@ -85,32 +85,6 @@ if (!config.type || config.type === 'cluster') {
         if (err) throw(err);
     });
 
-<<<<<<< HEAD
-} else if (config.type === 'module') { 
-    isServer = true;
-    isModule = true;
-    isCluster = false;
-} else if (config.type === 'link') { 
-    isServer = true;
-    isLink = true;
-    isCluster = false;
-} else if (config.type === 'router') { 
-    isServer = true;
-    isRouter = true;
-    isCluster = false;
-} else if (config.type === 'esb') { 
-    isServer = true;
-    isEsb = true;
-    isCluster = false;
-} else if (config.type === 'interface') { 
-    isServer = true;
-    isInterface = true;
-    isCluster = false;
-} else if (config.type === 'server') { 
-    isServer = true;
-    isCluster = true;
-=======
->>>>>>> f06837992004adc922be0304fa099858ce9e554f
 } else {
 
     isCluster = false;
