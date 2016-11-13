@@ -1,4 +1,6 @@
 //v0.2
+//TODO add md5 verification to cache management in order to redownload files if anomalies exist
+//TODO autosave a copy of config.json files before writing them and restore things if anomalies exist (preserve atomicity)
 
 var inquirer = require('inquirer');
 var jsonfile = require('jsonfile')
@@ -17,7 +19,6 @@ const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
 const emptyDir = require('empty-dir');
 const md5 = require("nodejs-md5");
-//TODO add md5 verification to cache management in order to redownload files if anomalies exist
 const ProgressBar = require('progress');
 
 const github = {
@@ -78,7 +79,7 @@ if (!config.type || config.type === 'cluster') {
     isCluster = true;
     isServer = false;
 
-    target_dir = '.';//Obsolete?
+    target_dir = '.';//TODO Obsolete?
     if(config.name) cluster_name = config.name;
     while (!cluster_name){
         cluster_name = promptSync('?'.green+' New Cluster detected. Name it:* '.bold.white);
