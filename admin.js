@@ -148,11 +148,32 @@ var build_cache = function() {
         execSync('git clone '+github.url+'/'+github["server-repo"]+'.git '+cache_folder+'/'+github["server-repo"]+' '+silent, (err, stdout, stderr) => {
             if(err) throw(err);
         });
-
     }
 }
 
-build_cache();
+var delete_cache = function(verbose) {
+    if (fs.existsSync(cache_folder)) { 
+        var silent = '>/dev/null 2>&1';
+        execSync('rm -rf '+cache_folder, (err, stdout, stderr) => {
+            if(err) throw(err);
+        });
+        if(verbose) console.log('Cache deleted!'.yellow);
+    } else {
+        if(verbose) console.log('There\'s no cache'.yellow);
+    }
+}
+
+var ensure_cache = function(verbose,verboseD,verboseB) {
+    if (!fs.existsSync(cache_folder)) { 
+        build_cache(verboseB);
+    } else {
+        delete_cache(verboseD);
+        build_cache(verboseB);
+    }
+    if(verbose) console.log('Cache is ready'.yellow);
+}
+
+ensure_cache(false);
 
 if (!fs.existsSync(run_folder)) {
     mkdirp(run_folder, function(err) { 
@@ -205,21 +226,15 @@ function overWrite(item, callback) {
 
 function main() {
 
-    var basic_menu = [];
-    if (fs.existsSync(cache_folder)) { 
-        basic_menu.push('Reset cache');
-    } else {
-        basic_menu.push('Build cache');
-    }
-    basic_menu.push('Quit');
-
     inquirer.prompt([{
         type: 'list',
         name: 'options',
         message: 'What do you want to do?',
         choices: choice_menu.concat([
-            new inquirer.Separator()
-        ].concat(basic_menu))
+            new inquirer.Separator(),
+            "Reset cache",
+            "Quit"
+        ])
     }]).then(function (answers) {
         switch(answers.options) {
 
@@ -412,7 +427,7 @@ function main() {
 
             case 'Start the cluster':
 
-                if(run[config.name].length) {
+                if(config && run && run[config.name] && run[config.name].length) {
                     console.log(colors.yellow('The Cluster is already running.'));
                     main();
                     return;
@@ -454,7 +469,7 @@ function main() {
 
             case 'Stop the cluster':
 
-                if(!run[config.name].length) {
+                if(config && run && run[config.name] && !run[config.name].length) {
                     console.log(colors.yellow('The Cluster is already stopped.'));
                     main();
                     return;
@@ -477,6 +492,7 @@ function main() {
 
             case 'Add a node':
 
+                ensure_cache(false);
                 var _config = {};
 
                 if (config) { 
@@ -1300,28 +1316,8 @@ function main() {
 
                 break;
 
-            case 'Build cache':
-                if (!fs.existsSync(cache_folder)) { 
-                    build_cache();
-                } else {
-                    console.log('Cache already exists'.yellow);
-                }
-                main();
-                return;
-                break;
-
             case 'Reset cache':
-                if (fs.existsSync(cache_folder)) { 
-                    var bar = new ProgressBar(':bar', { total : 1});
-                    var silent = '>/dev/null 2>&1';
-                    bar.tick();
-                    execSync('rm -rf '+cache_folder, (err, stdout, stderr) => {
-                        if(err) throw(err);
-                    });
-                    console.log('Cache deleted!'.yellow);
-                } else {
-                    console.log('There\'s no cache'.yellow);
-                }
+                ensure_cache(true,false,true);
                 main();
                 return;
                 break;
