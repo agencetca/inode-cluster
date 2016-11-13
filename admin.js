@@ -10,11 +10,15 @@ var child_process = require('child_process');
 var request = require('request');
 var colors = require('colors');
 const exec = require('child_process').exec;
+const execSync = require('child_process').execSync;
 const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
 const emptyDir = require('empty-dir');
+const md5 = require("nodejs-md5");
+//TODO add md5 verification to cache management in order to redownload files if anomalies exist
+const ProgressBar = require('progress');
 
 const github = {
     "url": "https://github.com/agencetca",
@@ -128,6 +132,23 @@ if(isCluster) {
 var run = {};
 var run_folder = target_dir+'/system';
 var run_file = run_folder+'/run.json';
+var cache_folder = run_folder+'/.cache';
+
+//Cache Management
+if (!fs.existsSync(cache_folder)) { 
+    var bar = new ProgressBar(':bar', { total : Object.keys(github).length-1});
+    var silent = '>/dev/null 2>&1';
+    bar.tick();
+    execSync('git clone '+github.url+'/'+github["cluster-repo"]+'.git '+cache_folder+'/'+github["cluster-repo"]+' '+silent, (err, stdout, stderr) => {
+        if(err) throw(err);
+    });
+    bar.tick();
+    execSync('git clone '+github.url+'/'+github["server-repo"]+'.git '+cache_folder+'/'+github["server-repo"]+' '+silent, (err, stdout, stderr) => {
+        if(err) throw(err);
+    });
+
+}
+
 
 if (!fs.existsSync(run_folder)) {
     mkdirp(run_folder, function(err) { 
@@ -495,8 +516,12 @@ function main() {
                     {
                         type: 'input',
                         name: 'name',
-                        message: 'server name?*',
+                        message: 'Node name?*',
                         validate: function(str){
+
+                            if(!str) {
+                                return 'Node name can\'t be null';
+                            }
 
                             if (fs.existsSync(target_dir+'/servers/'+str)) {
                                 return 'This name is already taken';
@@ -508,7 +533,8 @@ function main() {
                     {
                         type: 'input',
                         name: 'description',
-                        message: 'description?*',
+                        message: 'Description?',
+                        default: 'none',
                         validate: function(str){
                             return !!str;
                         }
@@ -580,27 +606,34 @@ function main() {
                                         if(err) console.error(err);
                                         exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (err, stdout, stderr) => {
                                             if(err) console.error(err);
-                                            exec('git clone '+github.url+'/'+github["cluster-repo"]+'.git '+target_dir+'/servers/'+resp.name+'/system/admin',
+                                            //exec('git clone '+github.url+'/'+github["cluster-repo"]+'.git '+target_dir+'/servers/'+resp.name+'/system/admin',
+
+                                            exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin '+
+                                                    '&& cp -r '+cache_folder+'/'+github["cluster-repo"]+'/* '+target_dir+'/servers/'+resp.name+'/system/admin',
                                                     (error, stdout, stderr) => {
                                                         if(err) console.error(err);
                                                         console.log(colors.green('Inode '+resp.name+' has been installed!'));
-                                                        if(resp.static) {
-                                                            var interface_msg = 'Interface is activated.';
-                                                            emptyDir(_config['static-root'], function (err, result) {
-                                                                if (err) {
-                                                                    console.error(err);
-                                                                } else {
-                                                                    interface_msg += 'Place client-side files into : "'+_config['static-root']+'".';
-                                                                }
+                                                        if(resp.static === 'true') {
+                                                            emptyDir(target_dir+'/servers/'+resp.name+'/'+_config['static-root'], 
+                                                                    function(err, result) {
+                                                                        if (err) {
+                                                                            console.error(err);
+                                                                        }
 
-                                                                console.log(colors.yellow(interface_msg));
+                                                                        if(result){
+                                                                            console.log(colors.yellow('Interface '+
+                                                                                        'is activated, but empty. '+
+                                                                                        'Place client-side files into : "'+
+                                                                                        _config['static-root']+'".'));
+                                                                        }
 
-                                                            });
+                                                                        main();
+
+                                                                    });
 
                                                         } else {
-                                                            console.log(colors.yellow('Interface is deactivated'));
+                                                            main();
                                                         }
-                                                        main();
                                                     });
                                         });
                                     });
@@ -623,7 +656,14 @@ function main() {
 
                         jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
                             if(err) console.error(err);
-                            exec('git clone '+github.url+'/'+github["server-repo"]+'.git '+target_dir+'/servers/'+resp.name,
+                            //exec('git clone '+github.url+'/'+github["server-repo"]+'.git '+target_dir+'/servers/'+resp.name,
+                            
+                            mkdirp(target_dir+'/servers/', function(err) { 
+                                if (err) throw err;
+                            });
+
+                            exec('mkdir '+target_dir+'/servers/'+resp.name+
+                                    ' && cp -r '+cache_folder+'/'+github["server-repo"]+'/* '+target_dir+'/servers/'+resp.name,
                                     (error, stdout, stderr) => {
                                         if(error) console.log(error);
 

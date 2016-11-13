@@ -6,7 +6,9 @@
     "inquirer": "^1.2.2",
     "jsonfile": "^2.4.0",
     "mkdirp": "^0.5.1",
+    "nodejs-md5": "^1.0.2",
     "portscanner": "^1.0.0",
+    "progress": "^1.1.8",
     "readline-sync": "^1.4.5",
     "request": "^2.78.0",
     "valid-url": "^1.0.9"
