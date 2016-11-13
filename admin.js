@@ -136,20 +136,23 @@ var run_file = run_folder+'/run.json';
 var cache_folder = run_folder+'/.cache';
 
 //Cache Management
-if (!fs.existsSync(cache_folder)) { 
-    var bar = new ProgressBar(':bar', { total : Object.keys(github).length-1});
-    var silent = '>/dev/null 2>&1';
-    bar.tick();
-    execSync('git clone '+github.url+'/'+github["cluster-repo"]+'.git '+cache_folder+'/'+github["cluster-repo"]+' '+silent, (err, stdout, stderr) => {
-        if(err) throw(err);
-    });
-    bar.tick();
-    execSync('git clone '+github.url+'/'+github["server-repo"]+'.git '+cache_folder+'/'+github["server-repo"]+' '+silent, (err, stdout, stderr) => {
-        if(err) throw(err);
-    });
+var build_cache = function() {
+    if (!fs.existsSync(cache_folder)) { 
+        var bar = new ProgressBar(':bar', { total : Object.keys(github).length-1});
+        var silent = '>/dev/null 2>&1';
+        bar.tick();
+        execSync('git clone '+github.url+'/'+github["cluster-repo"]+'.git '+cache_folder+'/'+github["cluster-repo"]+' '+silent, (err, stdout, stderr) => {
+            if(err) throw(err);
+        });
+        bar.tick();
+        execSync('git clone '+github.url+'/'+github["server-repo"]+'.git '+cache_folder+'/'+github["server-repo"]+' '+silent, (err, stdout, stderr) => {
+            if(err) throw(err);
+        });
 
+    }
 }
 
+build_cache();
 
 if (!fs.existsSync(run_folder)) {
     mkdirp(run_folder, function(err) { 
@@ -201,14 +204,22 @@ function overWrite(item, callback) {
 }
 
 function main() {
+
+    var basic_menu = [];
+    if (fs.existsSync(cache_folder)) { 
+        basic_menu.push('Reset cache');
+    } else {
+        basic_menu.push('Build cache');
+    }
+    basic_menu.push('Quit');
+
     inquirer.prompt([{
         type: 'list',
         name: 'options',
         message: 'What do you want to do?',
         choices: choice_menu.concat([
-            new inquirer.Separator(),
-            "Quit"
-        ])
+            new inquirer.Separator()
+        ].concat(basic_menu))
     }]).then(function (answers) {
         switch(answers.options) {
 
@@ -1288,6 +1299,33 @@ function main() {
                 });
 
                 break;
+
+            case 'Build cache':
+                if (!fs.existsSync(cache_folder)) { 
+                    build_cache();
+                } else {
+                    console.log('Cache already exists'.yellow);
+                }
+                main();
+                return;
+                break;
+
+            case 'Reset cache':
+                if (fs.existsSync(cache_folder)) { 
+                    var bar = new ProgressBar(':bar', { total : 1});
+                    var silent = '>/dev/null 2>&1';
+                    bar.tick();
+                    execSync('rm -rf '+cache_folder, (err, stdout, stderr) => {
+                        if(err) throw(err);
+                    });
+                    console.log('Cache deleted!'.yellow);
+                } else {
+                    console.log('There\'s no cache'.yellow);
+                }
+                main();
+                return;
+                break;
+
 
             case 'Quit':
                 console.log('bye');
