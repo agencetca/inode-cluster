@@ -170,6 +170,7 @@ var loadMenu = function() {
             choice_menu = choice_menu.concat([
                     "Add a node",
                     "Start the cluster",
+                    "Restart the cluster",
                     "Stop the cluster",
                     "Inspect a node"
             ]);
@@ -321,6 +322,95 @@ var reloadConfig = function(cbk) {
     loadMenu();
     if(cbk) cbk();
 
+}
+
+var cluster = {
+    start : function(cbk) {
+
+        if(config && run && run[config.name] && run[config.name].length) {
+            console.log(colors.yellow('The Cluster is already running.'));
+            main();
+            return;
+        } else if(config && (!config.servers || !detect.servers.exist())) {
+            console.log('No servers available'.red);
+            main();
+            return;
+        }
+
+        var timer = 0;
+
+        for(var serv in config.servers) {
+            if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
+
+                timer += 700;
+
+                const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
+                    detached: true,
+                    stdio: ['ignore',process.stdout,'ignore']
+                });
+
+                if(!run[config.name]) {
+                    run[config.name] = [];
+                }
+
+                run[config.name].push(proc.pid);
+
+            } else {
+                console.log('Server seems broken, no app.js found'.yellow,'Abort'.red);
+            }
+
+        }
+
+        jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
+            if(err) throw(err);
+            setTimeout(function() {
+                console.log('');//important
+                if(cbk) {
+                    cbk();
+                    return;
+                } else {
+                main();
+                }
+            },timer);
+        });
+
+    },
+    stop : function(cbk) {
+
+        if(config && run && run[config.name] && !run[config.name].length) {
+            console.log(colors.yellow('The Cluster is already stopped.'));
+            main();
+            return;
+        } else if(config && (!config.servers || !detect.servers.exist())) {
+            console.log('No servers available'.red);
+            main();
+            return;
+        }
+
+        while(run[config.name].length) {
+            exec('kill '+run[config.name].shift(), (err, stdout, stderr) => {
+                //if(err) throw(err);
+            });
+        }
+
+        jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
+            if(err) throw(err);
+            setTimeout(function() {
+                if(cbk) {
+                    cbk();
+                    return;
+                } else {
+                    main();
+                }
+            },800);
+        });
+
+    },
+    restart : function() {
+        cluster.stop(function() {
+            cluster.start();
+        });
+    }
 }
 
 function main() {
@@ -528,74 +618,19 @@ function main() {
 
                 case 'Start the cluster':
 
-                    if(config && run && run[config.name] && run[config.name].length) {
-                        console.log(colors.yellow('The Cluster is already running.'));
-                        main();
-                        return;
-                    } else if(config && (!config.servers || !detect.servers.exist())) {
-                        console.log('No servers available'.red);
-                        main();
-                        return;
-                    }
+                    cluster.start();
 
-                    var timer = 0;
+                    break;
 
-                    for(var serv in config.servers) {
-                        if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
+                case 'Restart the cluster':
 
-                            timer += 700;
-
-                            const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
-                                detached: true,
-                                stdio: ['ignore',process.stdout,'ignore']
-                            });
-
-                            if(!run[config.name]) {
-                                run[config.name] = [];
-                            }
-
-                            run[config.name].push(proc.pid);
-
-                        } else {
-                            console.log('Server seems broken, no app.js found'.yellow,'Abort'.red);
-                        }
-
-                    }
-
-                    jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
-                        if(err) throw(err);
-                        setTimeout(function() {
-                            console.log('');//important
-                            main();
-                        },timer);
-                    });
+                    cluster.restart();
 
                     break;
 
                 case 'Stop the cluster':
 
-                    if(config && run && run[config.name] && !run[config.name].length) {
-                        console.log(colors.yellow('The Cluster is already stopped.'));
-                        main();
-                        return;
-                    } else if(config && (!config.servers || !detect.servers.exist())) {
-                        console.log('No servers available'.red);
-                        main();
-                        return;
-                    }
-
-                    while(run[config.name].length) {
-                        exec('kill '+run[config.name].shift(), (err, stdout, stderr) => {
-                            //if(err) throw(err);
-                        });
-                    }
-
-                    jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
-                        if(err) throw(err);
-                        setTimeout(function() {
-                            main();
-                        },800);
-                    });
+                    cluster.stop();
 
                     break;
 
