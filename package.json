@@ -4,6 +4,7 @@
     "empty-dir": "^0.2.1",
     "findit": "^2.0.0",
     "inquirer": "^1.2.2",
+    "is-online": "^5.1.2",
     "jsonfile": "^2.4.0",
     "mkdirp": "^0.5.1",
     "nodejs-md5": "^1.0.2",
