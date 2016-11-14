@@ -20,7 +20,7 @@ const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
 const emptyDir = require('empty-dir');
-const md5 = require("nodejs-md5");
+const art = require("ascii-art");
 const ProgressBar = require('progress');
 const isOnline = require('is-online');
 
@@ -331,6 +331,14 @@ var reloadConfig = function(cbk) {
 
 }
 
+var isClusterRunning = function() {
+    if(config && run && run[config.name] && run[config.name].length) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 var cluster = {
     start : function(cbk) {
 
@@ -423,6 +431,10 @@ var cluster = {
 function main() {
 
     reloadConfig(function() {
+
+        if(detect.servers.exist()) {
+            console.log(colors.italic.blue("Cluster is running : "+isClusterRunning()));
+        }
 
         inquirer.prompt([{
             type: 'list',
@@ -1548,7 +1560,12 @@ readArguments(function(args) {
                 //read.file.config(function(cf) {
                     ensure_cache(function() {
                         loadMenu();
-                        main();
+
+                        art.font(config.name.toUpperCase(), 'Doom', function(rendered){
+                            console.log(colors.yellow('\n\n'+rendered));
+                            main();
+                        });
+
                     },false);
                 //});
             });
