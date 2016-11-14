@@ -54,8 +54,14 @@ var readArguments = function(cbk) {
         if(process.argv[2] === 'save') {
             var message = process.argv[3] || 'various (automated)';
             exec('git add . && git commit -m "'+message+'" && git push -u origin master', (err, stdout, stderr) => {
-                if(err) console.log(err.code);
-                if(cbk) cbk(args);
+                if(err && err.code === 1) {
+                    exec('git push -u origin master', (err, stdout, stderr) => {
+                        if(err) console.log(err.code);
+                        if(cbk) cbk(args);
+                    });
+                } else {
+                    if(cbk) cbk(args);
+                }
             });
         }
 
