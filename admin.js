@@ -60,6 +60,7 @@ var readArguments = function(cbk) {
                         if(cbk) cbk(args);
                     });
                 } else {
+                    if(err) console.log(err.code);
                     if(cbk) cbk(args);
                 }
             });
