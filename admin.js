@@ -109,8 +109,13 @@ var define = {
 var write = {
     file : {
         config : function(cbk,args) {
-
             jsonfile.writeFile(config_file, config, {spaces: 2}, function(err) {
+                //if (err) throw(err);
+                if(cbk) cbk(args);
+            });
+        },
+        uri : function(uri, config, cbk, args) {
+            jsonfile.writeFile(uri, config, {spaces: 2}, function(err) {
                 //if (err) throw(err);
                 if(cbk) cbk(args);
             });
@@ -173,17 +178,26 @@ var loadMenu = function() {
     choice_menu = [];
 
     if(isCluster) {
+
+        choice_menu = choice_menu.concat([
+            "Add a node"
+        ]);
+
         if (config && config.servers && detect.servers.exist()) {
-            choice_menu = choice_menu.concat([
-                    "Add a node",
-                    "Start the cluster",
+
+            if(isClusterRunning()) {
+                choice_menu = choice_menu.concat([
                     "Restart the cluster",
-                    "Stop the cluster",
-                    "Inspect a node"
-            ]);
-        } else {
+                    "Stop the cluster"
+                ]);
+            } else {
+                choice_menu = choice_menu.concat([
+                    "Start the cluster"
+                ]);
+            }
+
             choice_menu = choice_menu.concat([
-                    "Add a node"
+                "Configure a node"
             ]);
         }
     } else if(isPicoService) {
@@ -448,7 +462,7 @@ function main() {
         }]).then(function (answers) {
             switch(answers.options) {
 
-                case 'Inspect a node':
+                case 'Configure a node':
 
                     if(!config.servers || !detect.servers.exist()) {
                         console.log('No servers available'.red);
@@ -479,17 +493,105 @@ function main() {
                             console.log('\n');
                             cbk();
                         },
+                        'browser' : function(uri, cbk) {
+                            var browser = spawn('firefox', [uri], {detached: true, stdio: 'ignore'})
+                            cbk();
+                        },
+                        'edit' : function(uri, cbk) {
+                            var editor = spawn('vim', [uri], {stdio: 'inherit'})
+                            editor.on('exit', function() {
+                                cbk();
+                            });
+                        },
                             'list-files-in-dir' : function(dir,cbk) {
                                 fs.readdir(dir, (err, files) => {
                                     cbk(files);
                                 })
                             },
-                        'config' : function(name) {
-                            var config = require(target_dir+'/servers/'+name+'/config.json');
-                            methods.message(config, function() {
-                                methods.back();
-                            });
-                        },
+                            'view config' : function(name) {
+                                var config = require(target_dir+'/servers/'+name+'/config.json');
+                                methods.message(config, function() {
+                                    methods.back();
+                                });
+                            },
+                            'edit config' : function(name) {
+                                var uri = target_dir+'/servers/'+name+'/config.json';
+                                var config = require(uri);
+                                methods.edit(uri, function() {
+                                    methods.back();
+                                });
+                            },
+                            'view interface' : function(name) {
+                                var uri = target_dir+'/servers/'+name;
+                                var config = require(uri+'/config.json');
+                                var interface_folder = uri+'/'+config['static-root'];
+                                var interface_index = interface_folder+'/'+config['static-entry-point'];
+
+                                if (!fs.existsSync(interface_folder)) {
+                                    if(fs.existsSync(interface_index)) {
+                                        methods.browser(interface_index, function() {
+                                                methods.back();
+                                        });
+                                    } else {
+                                        //TODO
+                                        methods.message('todo : list possible index files and prompt for manual choose'.yellow, function() {
+                                            methods.back();
+                                        });
+                                    }
+
+                                } else {
+                                    methods.message(colors.red('Error occured : '+interface_folder+', the folder doesn\'t exist in config.\n'+
+                                    'Please, double check entry "static-root" in : '+uri+'/config.json\n'+
+                                    'Abort.'), function() {
+                                        methods.back();
+                                    });
+                                }
+                            },
+                            'edit interface' : function(name) {
+                                var uri = target_dir+'/servers/'+name+'/config.json';
+                                var config = require(uri);
+
+                                var interface_folder = uri+'/'+config['static-root'];
+                                var interface_index = interface_folder+'/'+config['static-entry-point'];
+                                //HERE
+                                if (fs.existsSync(interface_folder)) {
+                                    if(fs.existsSync(interface_index)) {
+                                        console.log('Entry point : '+interface_index);
+                                    }
+                                }
+
+                                if(config['static-content-enabled'] !== 'true') {
+                                    methods.message('Interface '+name+' can not be enabled', function() {
+                                        methods.back();
+                                    });
+                                } else {
+                                    var interface_folder = uri+'/'+config;
+                                    methods.edit(uri, function() {
+                                        methods.back();
+                                    });
+                                }
+
+                            },
+                            'enable interface' : function(name) {
+                                var uri = target_dir+'/servers/'+name+'/config.json';
+                                var config = require(uri);
+                                config['static-content-enabled'] = 'true';
+                                write.file.uri(uri, config, function() {
+                                    methods.message('Interface '+name+' enabled', function() {
+                                        methods.back();
+                                    });
+                                });
+                            },
+                            'disable interface' : function(name) {
+                                var uri = target_dir+'/servers/'+name+'/config.json';
+                                var config = require(uri);
+                                config['static-content-enabled'] = 'false';
+                                write.file.uri(uri, config, function() {
+                                    methods.message('Interface '+name+' disabled', function() {
+                                        methods.back();
+                                    });
+                                });
+                            },
                         'routes' : function(name) {
                             methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
                                 var sel = [];
@@ -534,6 +636,12 @@ function main() {
 
                     function ask(question) {
 
+                        var question_generator = null;
+                        if(typeof question === 'function') {
+                            question_generator = question;
+                            question = question(selected);
+                        }
+
                         if(question.before) {
                             question.before();
                         }
@@ -560,7 +668,13 @@ function main() {
                                 methods['back']();
                                 return;
                             } else {
-                                history.unshift(question);
+
+                                if(question_generator !== null) {
+                                    history.unshift(question_generator);
+                                } else {
+                                    history.unshift(question);
+                                }
+
                             }
 
                             if(select.single && select.single[answers['q']]) {
@@ -596,36 +710,65 @@ function main() {
                             type: 'list',
                             message: 'Menu',
                             choices: [
-                                'info',
-                                'update',
-                                'upgrade'
-                            ]
-                        },
-                        info : {
-                            type: 'list',
-                            message: 'View',
-                            choices: [
                                 'config',
-                                'routes',
-                                'middlewares'
+                                'interface',
+                                'services'
                             ]
                         },
-                        update : {
+                        config : {
                             type: 'list',
-                            message: 'Update',
+                            message: 'Config',
                             choices: [
-                                'thing to update 1',
-                                'thing to update 2',
-                                'thing to update 3'
+                                'view config',
+                                'edit config'
                             ]
                         },
-                        upgrade : {
+                        interface : function(name) {
+                            var uri = target_dir+'/servers/'+name+'/config.json';
+                            var config = require(uri);
+                            var enability = '';
+
+                            if(config['static-content-enabled'] === 'true') {
+
+                                enability = 'disable';
+
+                            } else {
+
+                                if (fs.existsSync(target_dir+'/servers/'+name+'/static')) {
+
+                                    enability = 'enable';
+
+                                } else {
+                                    return {
+                                        type: 'list',
+                                        message: 'Interface',
+                                        choices: [
+                                            'add interface'
+                                        ]
+                                    }
+                                }
+                            }
+
+                            return {
+                                type: 'list',
+                                message: 'Interface',
+                                choices: [
+                                    'view interface',
+                                    'edit interface',
+                                    enability+' interface',
+                                    'remove interface',
+                                    'plug service to interface',
+                                    'unplug service from interface'
+                                ]
+                            }
+                        },
+                        services : {
                             type: 'list',
-                            message: 'Upgrade',
+                            message: 'Services',
                             choices: [
-                                'thing to upgrade 1',
-                                'thing to upgrade 2',
-                                'thing to upgrade 3'
+                                'view',
+                                'add',
+                                'remove'
                             ]
                         }
 
