@@ -9,6 +9,7 @@ const inquirer = require('inquirer');
 const jsonfile = require('jsonfile')
 const mkdirp = require('mkdirp');
 const fs = require('fs');
+const fse = require('fs-extra');
 const path = require('path');
 const child_process = require('child_process');
 const request = require('request');
@@ -23,11 +24,15 @@ const emptyDir = require('empty-dir');
 const art = require("ascii-art");
 const ProgressBar = require('progress');
 const isOnline = require('is-online');
+const isDirectory = require('is-directory');
+const stripcolorcodes = require('stripcolorcodes');
 
 const github = {
     "url": "https://github.com/agencetca",
-    "cluster-repo": "inode-cluster",
-    "server-repo": "inode-server",
+    repo : {
+        "cluster-repo": "inode-cluster",
+        "server-repo": "inode-server",
+    }
 
 }
 
@@ -43,10 +48,565 @@ var run_folder = '';
 var run_file = '';
 var cache_folder = '';
 var args = false;
+var pwd = '';
+var history = [];
+var selected = '';
+var select = {
+    single : {
+        menu : {
+            type: 'list',
+            message: 'Menu',
+            choices: function(sel) {
+                var enable = '';
+                if(config.servers[sel]) {
+                    enable = 'disable';
+                } else {
+                    enable = 'enable';
+                }
 
+                return [
+                    enable,
+                    'delete',
+                    'config',
+                    'interface',
+                    'services'
+                ];
+            }
+        },
+        config : {
+            type: 'list',
+            message: 'Config',
+            choices: [
+                'view config',
+                'edit config'
+            ]
+        },
+        interface : function(name) {
+            var uri = target_dir+'/servers/'+name+'/config.json';
+            var config = require(uri);
+            var enability = '';
+
+            if(config['static-content-enabled'] === 'true') {
+
+                enability = 'disable';
+
+            } else {
+
+                if (fs.existsSync(target_dir+'/servers/'+name+'/static')) {
+
+                    enability = 'enable';
+
+                } else {
+                    return {
+                        type: 'list',
+                        message: 'Interface',
+                        choices: [
+                            'add interface'
+                        ]
+                    }
+                }
+            }
+
+            return {
+                type: 'list',
+                message: 'Interface',
+                choices: [
+                    'preview interface',
+                    'explore interface',
+                    enability+' interface',
+                        'remove interface',
+                        'plug service to interface',
+                            'unplug service from interface'
+                ]
+            }
+        },
+        services : {
+            type: 'list',
+            message: 'Services',
+            choices: [
+                'view',
+                'add',
+                'remove'
+            ]
+        }
+
+    }
+};
+
+var methods = {
+    'enable' : function (item) {
+        if(!config.disabled) config.disabled = {};
+        if(!config.servers) config.servers = {};
+        config.servers[item] = config.disabled[item];
+        delete config.disabled[item];
+        write.file.config(function() {
+            methods.message('Inode '+item+' has been enabled!', function() {
+                methods.back();
+            });
+        });
+    },
+    'disable' : function (item) {
+        if(!config.disabled) config.disabled = {};
+        if(!config.servers) config.servers = {};
+        config.disabled[item] = config.servers[item];
+        delete config.servers[item];
+        write.file.config(function() {
+            methods.message('Inode '+item+' has been disabled!', function() {
+                methods.back();
+            });
+        });
+    },
+    'delete' : function (item) {
+        delete config.servers[item];
+        fse.remove(target_dir+'/servers/'+item, function (err) {
+            if(err) throw(err);
+            write.file.config(function() {
+                methods.message('Inode '+item+' has been deleted successfully!', function() {
+                    history.shift();
+                    methods.back();
+                });
+            });
+        });
+    },
+    'back' : function() {
+
+        if(ask && history.length) {
+            ask(history.shift());
+        } else {
+            main();
+        }
+    },
+    'message' : function(msg, cbk) {
+
+        if(typeof msg === 'function') {
+            msg = msg.toString();
+        } 
+
+        console.log('\n');
+        console.log(msg);
+        console.log('\n');
+        cbk();
+    },
+    'browser' : function(uri, cbk) {
+        var browser = spawn('firefox', [uri], {detached: true, stdio: 'ignore'})
+            cbk();
+    },
+    'read' : function(uri, cbk) {
+        fs.readFile(uri, 'utf8', function (err,data) {
+            if (err) {
+                return console.log(err);
+            }
+            cbk(data);
+        });
+    },
+    'edit' : function(uri, cbk) {
+        var editor = spawn('vim', [uri], {stdio: 'inherit'})
+            editor.on('exit', function() {
+                cbk();
+            });
+    },
+    'explore' : function(uri, msg, choices, cbk) {
+
+        pwd = uri;//important
+
+        if(typeof cbk !== 'function' && typeof msg === 'function' && typeof choices !== 'function')  {
+            cbk = msg;
+            msg = false;
+            choices = false;
+        } else if(typeof cbk !== 'function' && typeof choices === 'function')  {
+            cbk = choices;
+            choices = false;
+        }
+
+        //TODO isArray
+        if(typeof choices !== 'object')  {
+            choices = ['view file','edit file','delete file'];
+        }
+
+        if(typeof cbk !== 'function')  {
+            cbk = function() {
+                methods.back();
+            }
+        }
+
+        if(!msg)  {
+            var pattern = new RegExp('.*static/?');
+            var furi = uri.replace(pattern,'/');
+            msg = 'Explore '+furi.green;
+        }
+
+        methods['list-files-in-dir'](uri, function(files) { 
+
+            function resolve() {
+                ask({
+                    type: 'list',
+                    message: msg,
+                    choices: files.sort().concat([
+                            'Add a new file'.italic.white,
+                            'Add a new folder'.italic.white
+                    ]),
+                    callback : function(file) {
+
+                        if(!msg) { 
+                            msg += colors.green('/'+file);
+                        }
+
+                        isDirectory(uri+'/'+file, function(err, dir) {
+                            if (err) throw err;
+                            if(dir === true) {
+                                methods.explore(uri+'/'+file, cbk);
+                            } else {
+
+                                ask({
+                                    type: 'list',
+                                    message: 'File '+file,
+                                    choices: choices,
+                                    callback : function(choice) {
+                                        if(choice === 'view file') {
+                                            console.log(colors.yellow('\nFile : '+file));
+                                            methods.read(uri+'/'+file, function(data) {
+                                                methods.message(data, function() {
+                                                    methods.back();
+                                                });
+                                            });
+                                        } else if(choice === 'edit file') {
+                                            methods.edit(uri+'/'+file, function() {
+                                                methods.back();
+                                            });
+                                        } else if(choice === 'delete file') {
+                                            fs.unlinkSync(uri+'/'+file);
+                                            history.shift();
+                                            history.shift();
+                                            methods.explore(uri);
+                                        } else {
+                                            cbk(choice,uri+'/'+file);
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+
+            if(!files.length) {
+                msg += ' (Empty folder)'.red;
+                resolve();
+            } else {
+
+                for(let i=0; i<files.length; i++) {
+                    isDirectory(uri+'/'+files[i], function(err, dir) {
+                        if (err) throw err;
+                        if(dir === true) {
+                            files[i] = files[i].bold.green;
+                        } else {
+                            files[i] = files[i].yellow;
+                        }
+                        if(i === files.length-1) {
+                            resolve();
+                        }
+
+                    });
+                }
+
+            }
+
+        });
+    },
+        'Add a new file' : function(name,cbk) {
+            var uri = pwd;
+            var filename = promptSync('?'.green+' Name of the new file: '.white);
+            if(!fs.existsSync(uri+'/'+filename)) {
+                methods.edit(uri+'/'+filename, function() {
+                    history.shift();
+                    methods.explore(uri);
+                });
+            } else {
+                console.log(colors.red('Already exist'));
+                methods.back();
+            }
+
+        },
+        'Add a new folder' : function(name,cbk) {
+            var uri = pwd;
+            var folder = promptSync('?'.green+' Name of the new file: '.white);
+            if(!fs.existsSync(uri+'/'+folder)) {
+
+                mkdirp(uri+'/'+folder, function(err) { 
+                    if (err) throw err;
+                    history.shift();
+                    methods.explore(uri);
+                });
+            } else {
+                console.log(colors.red('Already exist'));
+                methods.back();
+            }
+
+        },
+            'list-files-in-dir' : function(dir,cbk) {
+                fs.readdir(dir, (err, files) => {
+                    cbk(files);
+                })
+            },
+            'view config' : function(name) {
+                delete require.cache[target_dir+'/servers/'+name+'/config.json'];
+                var config = require(target_dir+'/servers/'+name+'/config.json');
+                methods.message(config, function() {
+                    methods.back();
+                });
+            },
+                'edit config' : function(name) {
+                    var uri = target_dir+'/servers/'+name+'/config.json';
+                    var config = require(uri);
+                    methods.edit(uri, function() {
+                        write.file.config(function() {
+                            methods.back();
+                        });
+                    });
+                },
+                'define entry-point' : function(uri,cbk) {
+                    methods.message(colors.yellow('WARNING : The interface entry point is not set.'+
+                                '\nThe app gives you the ability to choose one below'), function() {
+                        function defineEntryPoint(fpath) {
+
+                            methods.explore(fpath, 'Select a new entry-point', ['select file'], function(choice, furi) {
+
+                                if (choice === 'select file') {
+                                    //HERE
+
+                                    history.shift();
+
+                                    ask({
+                                        type: 'list',
+                                        message: colors.green('The file '+path.basename(furi)+' will be the new entry point of the interface. Confirm?'),
+                                        default : 'yes',
+                                                  choices : ['yes','no'],
+                                                  callback : function(answ) {
+
+                                                      history.shift();
+                                                      if(answ === 'yes') {
+                                                          var pattern = new RegExp('.*static/');
+                                                          config['static-entry-point'] = furi.replace(pattern,'');
+                                                          //TODO handle ../ better, below
+                                                          write.file.uri(uri+'/../config.json', config, function() {
+                                                              console.log(uri+'/static/'+config['static-entry-point']);
+                                                              methods.browser(uri+'/static/'+config['static-entry-point'], function() {
+
+                                                                  methods.message('Entry point enabled\n', function() {
+                                                                      if(cbk) {
+                                                                          cbk();
+                                                                      } else {
+                                                                          methods.back();
+                                                                      }
+                                                                  });
+                                                              });
+                                                          });
+
+                                                      } else {
+                                                          defineEntryPoint(uri.replace(path.basename(uri)));
+                                                      }
+                                                  }
+                                    });
+
+                                }
+
+                            });
+                        }
+
+                        defineEntryPoint(uri);
+
+                    });
+                },
+                    'preview interface' : function(name) {
+
+                        var uri = target_dir+'/servers/'+name;
+                        delete require.cache[uri+'/config.json'];
+                        var config = require(uri+'/config.json');
+                        var interface_folder = uri+'/'+config['static-root'];
+                        var interface_index = interface_folder+'/'+config['static-entry-point'];
+
+                        if(fs.existsSync(interface_index)) {
+                            methods.browser(interface_index, function() {
+                                methods.message('Interface is currently shown in browser window', function() {
+                                    methods.back();
+                                });
+                            });
+                        } else {
+                            methods['define entry-point'](interface_folder, function() {
+                                methods.browser(interface_index, function(msg) {
+                                    methods.message(msg+'interface is currently shown in browser window', function() {
+                                        methods.back();
+                                    });
+                                });
+                            });
+                        }
+
+                    },
+                    'explore interface' : function(name) {
+                        var uri = target_dir+'/servers/'+name;
+                        delete require.cache[uri+'/config.json'];
+                        var config = require(uri+'/config.json');
+                        var interface_folder = uri+'/'+config['static-root'];
+                        var interface_index = interface_folder+'/'+config['static-entry-point'];
+
+                        if (fs.existsSync(interface_folder)) {
+
+                            if (!fs.existsSync(interface_index)) {
+                                methods['define entry-point'](interface_folder,function() {
+                                    methods.back();
+                                });
+                            } else {
+                                methods.explore(interface_folder);
+                            }
+
+                        } else {
+                            methods.message(colors.red('Error occured : '+interface_folder+', the folder doesn\'t exist in config.\n'+
+                                        'Please, double check entry "static-root" in : '+uri+'/config.json\n'+
+                                        'Abort.'), function() {
+                                methods.back();
+                            });
+                        }
+                    },
+                        'enable interface' : function(name) {
+                            var uri = target_dir+'/servers/'+name+'/config.json';
+                            delete require.cache[uri];
+                            var config = require(uri);
+                            config['static-content-enabled'] = 'true';
+                            write.file.uri(uri, config, function() {
+                                methods.message('Interface '+name+' enabled', function() {
+                                    methods.back();
+                                });
+                            });
+                        },
+                        'disable interface' : function(name) {
+                            var uri = target_dir+'/servers/'+name+'/config.json';
+                            delete require.cache[uri];
+                            var config = require(uri);
+                            config['static-content-enabled'] = 'false';
+                            write.file.uri(uri, config, function() {
+                                methods.message('Interface '+name+' disabled', function() {
+                                    methods.back();
+                                });
+                            });
+                        },
+    'routes' : function(name) {
+        methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
+            var sel = [];
+            var pattern = new RegExp('.*\.js');
+            files.forEach(file => {
+                if(file.match(pattern)) sel.push(file);
+            });
+            ask({
+                type: 'list',
+                message: 'Select a route',
+                choices: sel,
+                callback : function(choice) {
+                    var payload = require(target_dir+'/servers/'+name+'/routes/'+choice);
+                    methods.message(payload, function() {
+                        methods.back();
+                    });
+                }
+            });
+        });
+    },
+    'middlewares' : function(name) {
+        methods['list-files-in-dir'](target_dir+'/servers/'+name+'/middlewares', function(files) {
+            var sel = [];
+            var pattern = new RegExp('.*\.js');
+            files.forEach(file => {
+                if(file.match(pattern)) sel.push(file);
+            });
+            ask({
+                type: 'list',
+                message: 'Select a middleware',
+                choices: sel,
+                callback: function(choice) {
+                    var payload = require(target_dir+'/servers/'+name+'/middlewares/'+choice);
+                    methods.message(payload, function() {
+                        methods.back();
+                    });
+                }
+            });
+        });
+    }
+}
+
+
+function ask(question) {
+
+    var question_generator = null;
+    if(typeof question === 'function') {
+        question_generator = question;
+        question = question(selected);
+    }
+
+    var choice_generator = false;
+    if(question.choices && typeof question.choices === 'function') {
+        choice_generator = question.choices;
+        question.choices = question.choices(selected);
+    }
+
+    if(question.before) {
+        question.before();
+    }
+
+    var back = "back";
+    question.name = 'q';
+
+    if(question.choices) {
+        question.choices.push(
+                back
+                );
+    }
+
+    var que = question.message;
+    if(selected) {
+        question.message = 'Server : "'+selected+'" - '+que;
+    }
+
+    inquirer.prompt(question).then(function (answers) {
+
+        question.message = que;
+        if(choice_generator) {
+            question.choices = choice_generator;
+        } else {
+            question.choices.pop();
+        }
+        if(answers['q'] === back) {
+            methods['back']();
+            return;
+        } else {
+
+            if(question_generator !== null) {
+                history.unshift(question_generator);
+            } else {
+                history.unshift(question);
+            }
+
+        }
+
+        answers['q'] = stripcolorcodes(answers['q']);
+
+        if(select.single && select.single[answers['q']]) {
+            ask(select.single[answers['q']]);
+        } else if(config && config.servers && (config.servers[answers['q']] || detect.servers.disabled([answers['q']]))) {
+            selected = answers['q'];
+            ask(select.single.menu);
+        } else {
+            if (selected && methods[answers['q']] && typeof methods[answers['q']] === 'function') {
+                methods[answers['q']](selected);
+            } else {
+                if(question.callback) {
+                    question.callback(answers['q']);
+                } else {
+                    console.log('Nothing to do');
+                }
+            }
+        }
+    });
+}
 
 var readArguments = function(cbk) {
-
 
     if(process.argv[2]) {
         args = true;
@@ -169,6 +729,22 @@ var detect = {
             } else {
                 return false;
             }
+        },
+        disabled : function(server) {
+
+            if(server) {
+                if(config && config.disabled && config.disabled[server]) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } else {
+                if(config && config.disabled && Object.keys(config.disabled).length) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
         }
     }
 }
@@ -183,23 +759,27 @@ var loadMenu = function() {
             "Add a node"
         ]);
 
-        if (config && config.servers && detect.servers.exist()) {
+        //if (config && detect.servers.exist()) {
 
-            if(isClusterRunning()) {
+            if(!isClusterRunning()) {
+                choice_menu = choice_menu.concat([
+                    "Start the cluster"
+                ]);
+            } else {
                 choice_menu = choice_menu.concat([
                     "Restart the cluster",
                     "Stop the cluster"
                 ]);
-            } else {
-                choice_menu = choice_menu.concat([
-                    "Start the cluster"
-                ]);
             }
 
+        //}
+
+        if (config && (detect.servers.exist() || detect.servers.disabled())) {
             choice_menu = choice_menu.concat([
                 "Configure a node"
             ]);
         }
+
     } else if(isPicoService) {
         choice_menu = choice_menu.concat([
                 "Activate interface",
@@ -216,48 +796,45 @@ var loadMenu = function() {
     }
 }
 
-var doIt = {
-    ifInternetIs : {
-        offline : function(cbk) {
-            cbk();
-        },
-        online : function(cbk, hook) {
-
-            isOnline(function(err, online) {
-                if (online || hook === true) {
-                    cbk();
-                } else {
-                    console.log('This application needs a valid internet connection. Abort'.red);
-                }
-            });
-        }
-    }
-}
-
 //Cache Management
 var build_cache = function(cbk,verbose) {
 
-    doIt.ifInternetIs.online(function() {
+    isOnline(function(err, online) {
+        if (online) {
 
-        if (!fs.existsSync(cache_folder)) { 
-            var bar = new ProgressBar(':bar', { total : Object.keys(github).length-1});
-            var silent = '>/dev/null 2>&1';
-            bar.tick();
-            execSync('git clone '+github.url+'/'+github["cluster-repo"]+'.git '+cache_folder+'/'+github["cluster-repo"]+' '+silent, (err, stdout, stderr) => {
-                if(err) throw(err);
-            });
-            bar.tick();
-            execSync('git clone '+github.url+'/'+github["server-repo"]+'.git '+cache_folder+'/'+github["server-repo"]+' '+silent, (err, stdout, stderr) => {
-                if(err) throw(err);
+            fse.remove(cache_folder, function (err) {
+
+                if (err) return console.error(err);
+
+                mkdirp(cache_folder, function(err) { 
+                    if (err) throw err;
+                });
+
+                var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length});
+                var silent = '>/dev/null 2>&1';
+                bar.tick();
+                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["cluster-repo"]+'.git '+silent, (err, stdout, stderr) => {
+                    if(err) throw(err);
+                });
+                bar.tick();
+                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git '+silent, (err, stdout, stderr) => {
+                    if(err) throw(err);
+                });
+
+                if(verbose) console.log('Cache built'.yellow);
+
+
+                if(cbk) cbk();
+
+
             });
 
-            if(verbose) console.log('Cache built'.yellow);
+
         } else {
-            if(verbose) console.log('Cache already exists'.yellow);
+            console.log('This application needs a valid internet connection. Abort'.red);
         }
 
-        if(cbk) cbk();
-    }, fs.existsSync(cache_folder));
+    });
 }
 
 var delete_cache = function(cbk, verbose) {
@@ -278,11 +855,29 @@ var ensure_cache = function(cbk,verbose) {
 
     //TODO insert MD5 check
 
-    build_cache(function() {
+    var check = true;
+    var repos = Object.keys(github.repo);
+
+    for (let i=0; i<repos.length; i++) {
+        if (!fs.existsSync(cache_folder+'/'+github.repo[repos[i]])) { 
+            check = false;
+        }
+    }
+
+    if(check === true) {
+
         if(cbk) cbk(function(verbose) {
             if(verbose) console.log('Cache is ready'.yellow);
         },verbose);
-    }, verbose);
+
+    } else {
+
+        build_cache(function() {
+            if(cbk) cbk(function(verbose) {
+                if(verbose) console.log('Cache is ready'.yellow);
+            },verbose);
+        }, verbose);
+    }
 
 }
 
@@ -360,13 +955,15 @@ var cluster = {
             console.log(colors.yellow('The Cluster is already running.'));
             main();
             return;
-        } else if(config && (!config.servers || !detect.servers.exist())) {
+        }
+        else if(config && !detect.servers.exist()) {
             console.log('No servers available'.red);
             main();
             return;
         }
 
         var timer = 0;
+        var failed = 0;
 
         for(var serv in config.servers) {
             if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
@@ -375,7 +972,16 @@ var cluster = {
 
                 const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
                     detached: true,
-                    stdio: ['ignore',process.stdout,'ignore']
+                    stdio: ['ignore',process.stdout,process.stdout]
+                });
+
+                proc.on('close', function(code, signal) {
+                    if(code === 1) {
+                        failed++;
+                        methods.message(colors.red('Inode can\'t be started'), function() {
+                            });
+                    }
+
                 });
 
                 if(!run[config.name]) {
@@ -394,12 +1000,18 @@ var cluster = {
             if(err) throw(err);
             setTimeout(function() {
                 console.log('');//important
-                if(cbk) {
-                    cbk();
-                    return;
-                } else {
-                main();
-                }
+
+                if(failed > 0) cluster.stop(function() {
+
+                    if(cbk) {
+                        cbk();
+                        return;
+                    } else {
+                        main();
+                    }
+                    
+                });
+
             },timer);
         });
 
@@ -408,10 +1020,6 @@ var cluster = {
 
         if(config && run && run[config.name] && !run[config.name].length) {
             console.log(colors.yellow('The Cluster is already stopped.'));
-            main();
-            return;
-        } else if(config && (!config.servers || !detect.servers.exist())) {
-            console.log('No servers available'.red);
             main();
             return;
         }
@@ -446,7 +1054,7 @@ function main() {
 
     reloadConfig(function() {
 
-        if(detect.servers.exist()) {
+        if(detect.servers.exist() || detect.servers.disabled()) {
             console.log(colors.italic.blue("Cluster is running : "+isClusterRunning()));
         }
 
@@ -464,317 +1072,22 @@ function main() {
 
                 case 'Configure a node':
 
-                    if(!config.servers || !detect.servers.exist()) {
+                    if(!config.servers || (!detect.servers.exist() && !detect.servers.disabled())) {
                         console.log('No servers available'.red);
                         main();
                         return;
                     }
 
-                    var history = [];
-                    var selected = '';
-                    var select = {};
-                    var methods = {
-                        'back' : function() {
-
-                            if(ask && history.length) {
-                                ask(history.shift());
-                            } else {
-                                main();
-                            }
-                        },
-                        'message' : function(msg, cbk) {
-
-                            if(typeof msg === 'function') {
-                                msg = msg.toString();
-                            } 
-
-                            console.log('\n');
-                            console.log(msg);
-                            console.log('\n');
-                            cbk();
-                        },
-                        'browser' : function(uri, cbk) {
-                            var browser = spawn('firefox', [uri], {detached: true, stdio: 'ignore'})
-                            cbk();
-                        },
-                        'edit' : function(uri, cbk) {
-                            var editor = spawn('vim', [uri], {stdio: 'inherit'})
-                            editor.on('exit', function() {
-                                cbk();
-                            });
-                        },
-                            'list-files-in-dir' : function(dir,cbk) {
-                                fs.readdir(dir, (err, files) => {
-                                    cbk(files);
-                                })
-                            },
-                            'view config' : function(name) {
-                                var config = require(target_dir+'/servers/'+name+'/config.json');
-                                methods.message(config, function() {
-                                    methods.back();
-                                });
-                            },
-                            'edit config' : function(name) {
-                                var uri = target_dir+'/servers/'+name+'/config.json';
-                                var config = require(uri);
-                                methods.edit(uri, function() {
-                                    methods.back();
-                                });
-                            },
-                            'view interface' : function(name) {
-                                var uri = target_dir+'/servers/'+name;
-                                var config = require(uri+'/config.json');
-                                var interface_folder = uri+'/'+config['static-root'];
-                                var interface_index = interface_folder+'/'+config['static-entry-point'];
-
-                                if (!fs.existsSync(interface_folder)) {
-                                    if(fs.existsSync(interface_index)) {
-                                        methods.browser(interface_index, function() {
-                                                methods.back();
-                                        });
-                                    } else {
-                                        //TODO
-                                        methods.message('todo : list possible index files and prompt for manual choose'.yellow, function() {
-                                            methods.back();
-                                        });
-                                    }
-
-                                } else {
-                                    methods.message(colors.red('Error occured : '+interface_folder+', the folder doesn\'t exist in config.\n'+
-                                    'Please, double check entry "static-root" in : '+uri+'/config.json\n'+
-                                    'Abort.'), function() {
-                                        methods.back();
-                                    });
-                                }
-                            },
-                            'edit interface' : function(name) {
-                                var uri = target_dir+'/servers/'+name+'/config.json';
-                                var config = require(uri);
-
-                                var interface_folder = uri+'/'+config['static-root'];
-                                var interface_index = interface_folder+'/'+config['static-entry-point'];
-                                //HERE
-                                if (fs.existsSync(interface_folder)) {
-                                    if(fs.existsSync(interface_index)) {
-                                        console.log('Entry point : '+interface_index);
-                                    }
-                                }
-
-                                if(config['static-content-enabled'] !== 'true') {
-                                    methods.message('Interface '+name+' can not be enabled', function() {
-                                        methods.back();
-                                    });
-                                } else {
-                                    var interface_folder = uri+'/'+config;
-                                    methods.edit(uri, function() {
-                                        methods.back();
-                                    });
-                                }
-
-                            },
-                            'enable interface' : function(name) {
-                                var uri = target_dir+'/servers/'+name+'/config.json';
-                                var config = require(uri);
-                                config['static-content-enabled'] = 'true';
-                                write.file.uri(uri, config, function() {
-                                    methods.message('Interface '+name+' enabled', function() {
-                                        methods.back();
-                                    });
-                                });
-                            },
-                            'disable interface' : function(name) {
-                                var uri = target_dir+'/servers/'+name+'/config.json';
-                                var config = require(uri);
-                                config['static-content-enabled'] = 'false';
-                                write.file.uri(uri, config, function() {
-                                    methods.message('Interface '+name+' disabled', function() {
-                                        methods.back();
-                                    });
-                                });
-                            },
-                        'routes' : function(name) {
-                            methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
-                                var sel = [];
-                                var pattern = new RegExp('.*\.js');
-                                files.forEach(file => {
-                                    if(file.match(pattern)) sel.push(file);
-                                });
-                                ask({
-                                    type: 'list',
-                                    message: 'Select a route',
-                                    choices: sel,
-                                    callback : function(choice) {
-                                        var payload = require(target_dir+'/servers/'+name+'/routes/'+choice);
-                                        methods.message(payload, function() {
-                                            methods.back();
-                                        });
-                                    }
-                                });
-                            });
-                        },
-                        'middlewares' : function(name) {
-                            methods['list-files-in-dir'](target_dir+'/servers/'+name+'/middlewares', function(files) {
-                                var sel = [];
-                                var pattern = new RegExp('.*\.js');
-                                files.forEach(file => {
-                                    if(file.match(pattern)) sel.push(file);
-                                });
-                                ask({
-                                    type: 'list',
-                                    message: 'Select a middleware',
-                                    choices: sel,
-                                    callback: function(choice) {
-                                        var payload = require(target_dir+'/servers/'+name+'/middlewares/'+choice);
-                                        methods.message(payload, function() {
-                                            methods.back();
-                                        });
-                                    }
-                                });
-                            });
-                        }
-                    };
-
-                    function ask(question) {
-
-                        var question_generator = null;
-                        if(typeof question === 'function') {
-                            question_generator = question;
-                            question = question(selected);
-                        }
-
-                        if(question.before) {
-                            question.before();
-                        }
-
-                        var back = "back";
-                        question.name = 'q';
-
-                        if(question.choices) {
-                            question.choices.push(
-                                    back
-                                    );
-                        }
-
-                        var que = question.message;
-                        if(selected) {
-                            question.message = 'Server : "'+selected+'" - '+que;
-                        }
-
-                        inquirer.prompt(question).then(function (answers) {
-
-                            question.message = que;
-                            question.choices.pop();
-                            if(answers['q'] === back) {
-                                methods['back']();
-                                return;
-                            } else {
-
-                                if(question_generator !== null) {
-                                    history.unshift(question_generator);
-                                } else {
-                                    history.unshift(question);
-                                }
-
-                            }
-
-                            if(select.single && select.single[answers['q']]) {
-                                ask(select.single[answers['q']]);
-                            } else if(config && config.servers && config.servers[answers['q']]) {
-                                selected = answers['q'];
-                                ask(select.single.menu);
-                            } else {
-                                if (selected && methods[answers['q']] && typeof methods[answers['q']] === 'function') {
-                                    methods[answers['q']](selected);
-                                } else {
-                                    if(question.callback) {
-                                        question.callback(answers['q']);
-                                    } else {
-                                        console.log('Nothing to do');
-                                    }
-                                }
-                            }
-                        });
-                    }
-
-                    select.list = {
+                    ask({
                         type: 'list',
                         message: 'Choose a server',
                         before : function() {
                             selected = '';
                         },
-                        choices: Object.keys(config.servers)
-                    };
-
-                    select.single = {
-                        menu : {
-                            type: 'list',
-                            message: 'Menu',
-                            choices: [
-                                'config',
-                                'interface',
-                                'services'
-                            ]
-                        },
-                        config : {
-                            type: 'list',
-                            message: 'Config',
-                            choices: [
-                                'view config',
-                                'edit config'
-                            ]
-                        },
-                        interface : function(name) {
-                            var uri = target_dir+'/servers/'+name+'/config.json';
-                            var config = require(uri);
-                            var enability = '';
-
-                            if(config['static-content-enabled'] === 'true') {
-
-                                enability = 'disable';
-
-                            } else {
-
-                                if (fs.existsSync(target_dir+'/servers/'+name+'/static')) {
-
-                                    enability = 'enable';
-
-                                } else {
-                                    return {
-                                        type: 'list',
-                                        message: 'Interface',
-                                        choices: [
-                                            'add interface'
-                                        ]
-                                    }
-                                }
-                            }
-
-                            return {
-                                type: 'list',
-                                message: 'Interface',
-                                choices: [
-                                    'view interface',
-                                    'edit interface',
-                                    enability+' interface',
-                                    'remove interface',
-                                    'plug service to interface',
-                                    'unplug service from interface'
-                                ]
-                            }
-                        },
-                        services : {
-                            type: 'list',
-                            message: 'Services',
-                            choices: [
-                                'view',
-                                'add',
-                                'remove'
-                            ]
+                        choices: function() {
+                            return Object.keys(config.servers).concat(Object.keys(config.disabled))
                         }
-
-                    };
-
-                    ask(select.list);
+                    });
 
                     break;
 
@@ -798,11 +1111,11 @@ function main() {
 
                 case 'Add a node':
 
+                    var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length});
+
                     var _config = {};
 
-                    doIt.ifInternetIs.online(function() {
-
-                        //ensure_cache(function() {
+                        ensure_cache(function() {
                         if (config) { 
                             if(config['port-range']) {
                                 if(config['port-range'].split && config['port-range'].split('-')) {
@@ -942,10 +1255,20 @@ function main() {
                                                 _config['port-range'] = current_range;
                                                 jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
                                                     if(err) console.error(err);
-                                                        exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', function(err, stdout, stderr) {
+
+                                                    isOnline(function(err, online) {
+
+                                                        var npm = '';
+                                                        if (online) {
+                                                            npm = ' && npm install';
+                                                        } else {
+                                                            console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : '+'cd '+target_dir+'/servers/'+resp.name+' && npm install'));
+                                                        }
+
+                                                        exec('cd '+target_dir+'/servers/'+resp.name+npm, function(err, stdout, stderr) {
                                                             if(err) console.error(err);
                                                             var asterisk = '*';//'coz vim sucks
-                                                            exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin && cp -r '+cache_folder+'/'+github["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
+                                                            exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin && cp --verbose -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
                                                                 if(err) console.error(err);
                                                                 console.log(colors.green('Inode '+resp.name+' has been installed!'));
                                                                 if(resp.static === 'true') {
@@ -971,6 +1294,8 @@ function main() {
                                                                 }
                                                             });
                                                         });
+
+                                                    });
                                                 });
 
                                             } else {
@@ -999,7 +1324,7 @@ function main() {
                                     });
 
                                     var asterisk = '*';//'coz vim sucks
-                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp -r '+cache_folder+'/'+github["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
+                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp --verbose -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
                                         if(error) console.log(error);
 
                                         _config.name = resp.name;
@@ -1021,34 +1346,45 @@ function main() {
                                         } 
 
                                         if(resp['static-app-url']) {
-                                            _config['static-origin'] = resp['static-app-url'];
-                                            var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/'+_config['static-root']);
-                                                exec('git clone '+_config["static-origin"]+' '+static_abs_path, (error, stdout, stderr) => {
-                                                    if(error) throw(error);
-                                                    var fflag=0;
-                                                    var finder = require('findit')(static_abs_path);
-                                                    finder.on('file', function (file) {
-                                                        if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
-                                                            fflag=1;
-                                                            var pattern = new RegExp('.*'+resp.name+'\/?')
-                                                                _config['static-root'] = path.dirname(file.replace(pattern,''));
-                                                        } else if (path.basename(file) === 'bower.json') {
+
+                                            isOnline(function(err, online) {
+
+                                                _config['static-origin'] = resp['static-app-url'];
+                                                var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/'+_config['static-root']);
+
+                                                if (online) {
+                                                    exec('git clone '+_config["static-origin"]+' '+static_abs_path, (error, stdout, stderr) => {
+                                                        if(error) throw(error);
+                                                        var fflag=0;
+                                                        var finder = require('findit')(static_abs_path);
+                                                        finder.on('file', function (file) {
+                                                            if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
+                                                                fflag=1;
+                                                                var pattern = new RegExp('.*'+resp.name+'\/?')
+                                                                    _config['static-root'] = path.dirname(file.replace(pattern,''));
+                                                            } else if (path.basename(file) === 'bower.json') {
                                                                 exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
                                                                     if(error) throw error;
                                                                 });
-                                                        } else if (path.basename(file) === 'package.json') {
+                                                            } else if (path.basename(file) === 'package.json') {
                                                                 exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
                                                                     if(error) throw error;
                                                                 });
-                                                        }
+                                                            }
+                                                        });
+                                                        finder.on('error', function (error) {
+                                                            if(error) throw(error);
+                                                        });
+                                                        finder.on('end', function () {
+                                                            finalize_process();
+                                                        });
                                                     });
-                                                    finder.on('error', function (error) {
-                                                        if(error) throw(error);
-                                                    });
-                                                    finder.on('end', function () {
-                                                        finalize_process();
-                                                    });
-                                                });
+                                                } else {
+                                                    console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : cd '+static_abs_path+' && npm install && bower install'));
+                                                    finalize_process();
+                                                }
+
+                                            });
                                         } else {
                                             finalize_process();
                                         }
@@ -1057,9 +1393,7 @@ function main() {
                                 });
                             });
                         }); 
-                        //},false);
-
-                    });
+                        });
 
 
                     break;
@@ -1709,7 +2043,7 @@ readArguments(function(args) {
                             main();
                         });
 
-                    },false);
+                    });
                 //});
             });
 

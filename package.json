@@ -4,7 +4,9 @@
     "colors": "^1.1.2",
     "empty-dir": "^0.2.1",
     "findit": "^2.0.0",
+    "fs-extra": "^1.0.0",
     "inquirer": "^1.2.2",
+    "is-directory": "^0.3.1",
     "is-online": "^5.1.2",
     "jsonfile": "^2.4.0",
     "mkdirp": "^0.5.1",
@@ -13,6 +15,7 @@
     "progress": "^1.1.8",
     "readline-sync": "^1.4.5",
     "request": "^2.78.0",
+    "stripcolorcodes": "^0.1.0",
     "valid-url": "^1.0.9"
   }
 }
