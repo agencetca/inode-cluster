@@ -2,6 +2,7 @@
 //TODO add md5 verification to cache management in order to redownload files if anomalies exist
 //TODO autosave a copy of config.json files before writing them and restore things if anomalies exist (preserve atomicity)
 //TODO find a way to handle any internet interuption during node creation (that involve some downloads, i.e npm and bower install)
+//TODO Convert every exec by detached spawn
 
 
 //Constant declaration
@@ -26,6 +27,7 @@ const ProgressBar = require('progress');
 const isOnline = require('is-online');
 const isDirectory = require('is-directory');
 const stripcolorcodes = require('stripcolorcodes');
+const clone = require('gitclone');
 
 const github = {
     "url": "https://github.com/agencetca",
@@ -1237,10 +1239,10 @@ function main() {
                                 }
 
                                 if(resp.static === 'true') {
-                                    while (!validUrl.isUri(resp['static-app-url']) && resp['static-app-url'] !== ''){
-                                        resp['static-app-url'] = promptSync('?'.green+' Static app Github url: '.bold.white);
+                                    while (!resp['static-app-url'] && resp['static-app-url'] !== ''){
+                                        resp['static-app-url'] = promptSync('?'.green+' Github repository: '.bold.white);
                                     }
-                                    if (!validUrl.isUri(resp['static-app-url'])){
+                                    if (!validUrl.isUri('https://github.com/'+resp['static-app-url'])){
                                         resp['static-app-url'] = null;
                                     }
                                 }
@@ -1258,15 +1260,15 @@ function main() {
 
                                                     isOnline(function(err, online) {
 
-                                                        var npm = '';
                                                         if (online) {
-                                                            npm = ' && npm install';
+                                                            var install = spawn('npm', ['install', '--prefix', target_dir+'/servers/'+resp.name], {detached:true});
+                                                            install.on('error', function(err) {
+                                                                console.log(err);
+                                                            });
                                                         } else {
                                                             console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : '+'cd '+target_dir+'/servers/'+resp.name+' && npm install'));
                                                         }
 
-                                                        exec('cd '+target_dir+'/servers/'+resp.name+npm, function(err, stdout, stderr) {
-                                                            if(err) console.error(err);
                                                             var asterisk = '*';//'coz vim sucks
                                                             exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin && cp --verbose -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
                                                                 if(err) console.error(err);
@@ -1293,7 +1295,6 @@ function main() {
                                                                     main();
                                                                 }
                                                             });
-                                                        });
 
                                                     });
                                                 });
@@ -1353,8 +1354,12 @@ function main() {
                                                 var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/'+_config['static-root']);
 
                                                 if (online) {
-                                                    exec('git clone '+_config["static-origin"]+' '+static_abs_path, (error, stdout, stderr) => {
-                                                        if(error) throw(error);
+                                                    console.log('Cloning... ');
+                                                    clone(_config["static-origin"], { dest: static_abs_path }, [], (err) => {
+
+                                                        if (err) return console.error(err)
+                                                        console.log('Cloning... done.');
+
                                                         var fflag=0;
                                                         var finder = require('findit')(static_abs_path);
                                                         finder.on('file', function (file) {
