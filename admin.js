@@ -160,6 +160,7 @@ var methods = {
     },
     'delete' : function (item) {
         delete config.servers[item];
+        delete config.disabled[item];
         fse.remove(target_dir+'/servers/'+item, function (err) {
             if(err) throw(err);
             write.file.config(function() {
@@ -761,7 +762,7 @@ var loadMenu = function() {
             "Add a node"
         ]);
 
-        //if (config && detect.servers.exist()) {
+        if (config && detect.servers.exist()) {
 
             if(!isClusterRunning()) {
                 choice_menu = choice_menu.concat([
@@ -774,7 +775,7 @@ var loadMenu = function() {
                 ]);
             }
 
-        //}
+        }
 
         if (config && (detect.servers.exist() || detect.servers.disabled())) {
             choice_menu = choice_menu.concat([
@@ -812,22 +813,34 @@ var build_cache = function(cbk,verbose) {
                     if (err) throw err;
                 });
 
-                var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length});
+                var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length * 2});
                 var silent = '>/dev/null 2>&1';
                 bar.tick();
-                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["cluster-repo"]+'.git '+silent, (err, stdout, stderr) => {
+                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["cluster-repo"]+'.git'+silent, (err, stdout, stderr) => {
                     if(err) throw(err);
+                });
+                var cluster = spawn('npm',['install','--verbose','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
+                    stdio: 'inherit'
+                });
+                cluster.on('close', (code) => {
+                    bar.tick();
                 });
                 bar.tick();
-                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git '+silent, (err, stdout, stderr) => {
+                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git'+silent, (err, stdout, stderr) => {
                     if(err) throw(err);
                 });
+                var server = spawn('npm',['install','--verbose','--prefix',cache_folder+'/'+github.repo["server-repo"]], {
+                    stdio: 'inherit'
+                });
+                server.on('close', (code) => {
+                    bar.tick();
+                });
 
-                if(verbose) console.log('Cache built'.yellow);
 
-
-                if(cbk) cbk();
-
+                if (bar.complete) {
+                    if(verbose) console.log('Cache built'.yellow);
+                    if(cbk) cbk();
+                }
 
             });
 
@@ -1258,45 +1271,33 @@ function main() {
                                                 jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
                                                     if(err) console.error(err);
 
-                                                    isOnline(function(err, online) {
+                                                    var asterisk = '*';//'coz vim sucks
+                                                    exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin && cp -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
+                                                        if(err) console.error(err);
+                                                        console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                                        if(resp.static === 'true') {
+                                                            emptyDir(target_dir+'/servers/'+resp.name+'/'+_config['static-root'], 
+                                                                    function(err, result) {
+                                                                        if (err) {
+                                                                            console.error(err);
+                                                                        }
 
-                                                        if (online) {
-                                                            var install = spawn('npm', ['install', '--prefix', target_dir+'/servers/'+resp.name], {detached:true});
-                                                            install.on('error', function(err) {
-                                                                console.log(err);
-                                                            });
+                                                                        if(result){
+                                                                            console.log(colors.yellow('Interface '+
+                                                                                        'is activated, but empty. '+
+                                                                                        'Place client-side files into : "'+
+                                                                                        _config['static-root']+'".'));
+                                                                        }
+
+                                                                        main();
+
+                                                                    });
+
                                                         } else {
-                                                            console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : '+'cd '+target_dir+'/servers/'+resp.name+' && npm install'));
+                                                            main();
                                                         }
-
-                                                            var asterisk = '*';//'coz vim sucks
-                                                            exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin && cp --verbose -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
-                                                                if(err) console.error(err);
-                                                                console.log(colors.green('Inode '+resp.name+' has been installed!'));
-                                                                if(resp.static === 'true') {
-                                                                    emptyDir(target_dir+'/servers/'+resp.name+'/'+_config['static-root'], 
-                                                                            function(err, result) {
-                                                                                if (err) {
-                                                                                    console.error(err);
-                                                                                }
-
-                                                                                if(result){
-                                                                                    console.log(colors.yellow('Interface '+
-                                                                                                'is activated, but empty. '+
-                                                                                                'Place client-side files into : "'+
-                                                                                                _config['static-root']+'".'));
-                                                                                }
-
-                                                                                main();
-
-                                                                            });
-
-                                                                } else {
-                                                                    main();
-                                                                }
-                                                            });
-
                                                     });
+
                                                 });
 
                                             } else {
@@ -1325,7 +1326,7 @@ function main() {
                                     });
 
                                     var asterisk = '*';//'coz vim sucks
-                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp --verbose -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
+                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
                                         if(error) console.log(error);
 
                                         _config.name = resp.name;
@@ -2048,7 +2049,7 @@ readArguments(function(args) {
                             main();
                         });
 
-                    });
+                    }, true);
                 //});
             });
 
