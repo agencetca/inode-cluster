@@ -1024,16 +1024,23 @@ var cluster = {
             setTimeout(function() {
                 console.log('');//important
 
-                if(failed > 0) cluster.stop(function() {
-
+                if(failed > 0) {
+                    cluster.stop(function() {
+                        if(cbk) {
+                            cbk();
+                            return;
+                        } else {
+                            main();
+                        }
+                    });
+                } else {
                     if(cbk) {
                         cbk();
                         return;
                     } else {
                         main();
                     }
-                    
-                });
+                }
 
             },timer);
         });
