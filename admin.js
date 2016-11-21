@@ -813,37 +813,42 @@ var build_cache = function(cbk,verbose) {
                     if (err) throw err;
                 });
 
+
+                function launch(bar) {
+                    if (bar.complete) {
+                        if(verbose) console.log('Cache built'.yellow);
+                        if(cbk) cbk();
+                    }
+                }
+
                 var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length * 2});
                 var silent = '>/dev/null 2>&1';
-                bar.tick();
                 execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["cluster-repo"]+'.git'+silent, (err, stdout, stderr) => {
                     if(err) throw(err);
                 });
-                var cluster = spawn('npm',['install','--verbose','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
+                bar.tick();
+                //var cluster = spawn('npm',['install','--verbose','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
+                var cluster = spawn('npm',['install','--no-optional','--only=prod','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
                     stdio: 'inherit'
                 });
                 cluster.on('close', (code) => {
                     bar.tick();
+                    launch(bar);
                 });
-                bar.tick();
                 execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git'+silent, (err, stdout, stderr) => {
                     if(err) throw(err);
                 });
-                var server = spawn('npm',['install','--verbose','--prefix',cache_folder+'/'+github.repo["server-repo"]], {
+                bar.tick();
+                //var server = spawn('npm',['install','--verbose','--prefix',cache_folder+'/'+github.repo["server-repo"]], {
+                var server = spawn('npm',['install','--no-optional','--only=prod','--prefix',cache_folder+'/'+github.repo["server-repo"]], {
                     stdio: 'inherit'
                 });
                 server.on('close', (code) => {
                     bar.tick();
+                    launch(bar);
                 });
 
-
-                if (bar.complete) {
-                    if(verbose) console.log('Cache built'.yellow);
-                    if(cbk) cbk();
-                }
-
             });
-
 
         } else {
             console.log('This application needs a valid internet connection. Abort'.red);
@@ -909,11 +914,14 @@ var reset_cache = function(cbk, verbose) {
 function get_available_port(host,range,cbk) {
     if(host === 'localhost') host = '127.0.0.1';
     if(range.split) range = range.split('-');
-    portscanner.findAPortNotInUse(range[0], range[1], host, function(error, port) {
+    var min = parseInt(range[0],10);
+    var max = parseInt(range[1],10);
+    portscanner.findAPortNotInUse(min, max, host, function(error, port) {
         if(error) throw(error);
         cbk(port);
     })
 }
+
 
 function large_display(message) {
     console.log('\n**** '+message+' ****\n');
@@ -1126,11 +1134,9 @@ function main() {
 
                 case 'Add a node':
 
-                    var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length});
-
                     var _config = {};
 
-                        ensure_cache(function() {
+                        //ensure_cache(function() {
                         if (config) { 
                             if(config['port-range']) {
                                 if(config['port-range'].split && config['port-range'].split('-')) {
@@ -1399,7 +1405,7 @@ function main() {
                                 });
                             });
                         }); 
-                        });
+                        //});
 
 
                     break;
