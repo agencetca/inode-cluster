@@ -1261,9 +1261,11 @@ function main() {
                                     while (!resp['static-app-url'] && resp['static-app-url'] !== ''){
                                         resp['static-app-url'] = promptSync('?'.green+' Github repository: '.bold.white);
                                     }
-                                    if (!validUrl.isUri('https://github.com/'+resp['static-app-url'])){
-                                        resp['static-app-url'] = null;
-                                    }
+
+                                    var head = new RegExp('^(https?:\/\/)?github.com\/');
+                                    var tail = new RegExp('\.git$');
+                                    resp['static-app-url'] = resp['static-app-url'].replace(head,'').replace(tail,'');
+
                                 }
 
                                 finalize_process = function() {
@@ -1364,32 +1366,36 @@ function main() {
                                                     console.log('Cloning... ');
                                                     clone(_config["static-origin"], { dest: static_abs_path }, [], (err) => {
 
-                                                        if (err) return console.error(err)
-                                                        console.log('Cloning... done.');
-
-                                                        var fflag=0;
-                                                        var finder = require('findit')(static_abs_path);
-                                                        finder.on('file', function (file) {
-                                                            if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
-                                                                fflag=1;
-                                                                var pattern = new RegExp('.*'+resp.name+'\/?')
-                                                                    _config['static-root'] = path.dirname(file.replace(pattern,''));
-                                                            } else if (path.basename(file) === 'bower.json') {
-                                                                exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
-                                                                    if(error) throw error;
-                                                                });
-                                                            } else if (path.basename(file) === 'package.json') {
-                                                                exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
-                                                                    if(error) throw error;
-                                                                });
-                                                            }
-                                                        });
-                                                        finder.on('error', function (error) {
-                                                            if(error) throw(error);
-                                                        });
-                                                        finder.on('end', function () {
+                                                        if (err) {
+                                                            console.log('Cloning... error.'.red);
+                                                            //console.error(err)
                                                             finalize_process();
-                                                        });
+                                                        } else {
+                                                            console.log('Cloning... done.');
+                                                            var fflag=0;
+                                                            var finder = require('findit')(static_abs_path);
+                                                            finder.on('file', function (file) {
+                                                                if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
+                                                                    fflag=1;
+                                                                    var pattern = new RegExp('.*'+resp.name+'\/?')
+                                                                        _config['static-root'] = path.dirname(file.replace(pattern,''));
+                                                                } else if (path.basename(file) === 'bower.json') {
+                                                                    exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
+                                                                        if(error) throw error;
+                                                                    });
+                                                                } else if (path.basename(file) === 'package.json') {
+                                                                    exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
+                                                                        if(error) throw error;
+                                                                    });
+                                                                }
+                                                            });
+                                                            finder.on('error', function (error) {
+                                                                if(error) throw(error);
+                                                            });
+                                                            finder.on('end', function () {
+                                                                finalize_process();
+                                                            });
+                                                        }
                                                     });
                                                 } else {
                                                     console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : cd '+static_abs_path+' && npm install && bower install'));
