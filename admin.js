@@ -61,21 +61,21 @@ var select = {
             choices: function(sel) {
                 var enable = '';
                 if(config.servers[sel]) {
-                    enable = 'disable';
+                    enable = 'disable inode';
                 } else {
-                    enable = 'enable';
+                    enable = 'enable inode';
                 }
 
                 return [
                     enable,
-                    'delete',
-                    'config',
-                    'interface',
-                    'services'
+                    'delete inode',
+                    'inode config',
+                    'inode interface',
+                    'inode services'
                 ];
             }
         },
-        config : {
+        'inode config' : {
             type: 'list',
             message: 'Config',
             choices: [
@@ -83,46 +83,38 @@ var select = {
                 'edit config'
             ]
         },
-        interface : function(name) {
+        'inode interface' : function(name) {
             var uri = target_dir+'/servers/'+name+'/config.json';
             var config = require(uri);
-            var enability = '';
+            var list = [];
 
-            if(config['static-content-enabled'] === 'true') {
+            if (!fs.existsSync(target_dir+'/servers/'+name+'/static')) {
 
-                enability = 'disable';
+                list.push('create interface');
 
             } else {
 
-                if (fs.existsSync(target_dir+'/servers/'+name+'/static')) {
+                list.push('delete interface');
 
-                    enability = 'enable';
-
+                if(config['static-content-enabled'] === 'true') {
+                    list.push('disable interface');
                 } else {
-                    return {
-                        type: 'list',
-                        message: 'Interface',
-                        choices: [
-                            'add interface'
-                        ]
-                    }
+                    list.push('enable interface');
                 }
+
+                list.push('preview interface');
+                list.push('explore interface');
+                //list.push('plug service to interface');
+                //list.push('unplug service from interface');
             }
 
             return {
                 type: 'list',
                 message: 'Interface',
-                choices: [
-                    'preview interface',
-                    'explore interface',
-                    enability+' interface',
-                        'remove interface',
-                        'plug service to interface',
-                            'unplug service from interface'
-                ]
+                choices: list
             }
         },
-        services : {
+        'inode services' : {
             type: 'list',
             message: 'Services',
             choices: [
@@ -136,7 +128,7 @@ var select = {
 };
 
 var methods = {
-    'enable' : function (item) {
+    'enable inode' : function (item) {
         if(!config.disabled) config.disabled = {};
         if(!config.servers) config.servers = {};
         config.servers[item] = config.disabled[item];
@@ -147,7 +139,7 @@ var methods = {
             });
         });
     },
-    'disable' : function (item) {
+    'disable inode' : function (item) {
         if(!config.disabled) config.disabled = {};
         if(!config.servers) config.servers = {};
         config.disabled[item] = config.servers[item];
@@ -158,7 +150,7 @@ var methods = {
             });
         });
     },
-    'delete' : function (item) {
+    'delete inode' : function (item) {
         delete config.servers[item];
         delete config.disabled[item];
         fse.remove(target_dir+'/servers/'+item, function (err) {
@@ -292,10 +284,12 @@ var methods = {
                 });
             }
 
-            if(!files.length) {
+            if (!files) {
+                methods.back();
+            } else if(files && !files.length) {
                 msg += ' (Empty folder)'.red;
                 resolve();
-            } else {
+            } else if(files && files.length) {
 
                 for(let i=0; i<files.length; i++) {
                     isDirectory(uri+'/'+files[i], function(err, dir) {
@@ -420,6 +414,42 @@ var methods = {
 
                     });
                 },
+                    'create interface' : function(name) {
+                        var uri = target_dir+'/servers/'+name;
+                        delete require.cache[uri+'/config.json'];
+                        var _config = require(uri+'/config.json');
+                        _config['static-root'] = 'static';
+                        if (!fs.existsSync(uri+'/'+_config['static-root'])) {
+                            mkdirp(uri+'/static', function(err) { 
+                                if (err) throw err;
+                            });
+                            if(_config['static-entry-point']) delete _config['static-entry-point'];
+                            if(_config['static-origin']) delete _config['static-origin'];
+                        }
+                        _config['static-content-enabled'] = 'false';
+                        write.file.uri(uri+'/config.json',_config,function() {
+                            methods.message('Interface added', function() {
+                                methods.back();
+                            });
+                        });
+                    },
+                    'delete interface' : function(name) {
+                        var uri = target_dir+'/servers/'+name;
+                        delete require.cache[uri+'/config.json'];
+                        var _config = require(uri+'/config.json');
+                        _config['static-content-enabled'] = 'false';
+                        if(_config['static-root']) delete _config['static-root'];
+                        if(_config['static-entry-point']) delete _config['static-entry-point'];
+                        if(_config['static-origin']) delete _config['static-origin'];
+                        if (fs.existsSync(uri+'/static')) {
+                            execSync('rm -rf '+uri+'/static', (err, stdout, stderr) => {
+                                if(err) throw(err);
+                            });
+                        }
+                        methods.message('Interface deleted', function() {
+                            methods.back();
+                        });
+                    },
                     'preview interface' : function(name) {
 
                         var uri = target_dir+'/servers/'+name;
@@ -428,7 +458,9 @@ var methods = {
                         var interface_folder = uri+'/'+config['static-root'];
                         var interface_index = interface_folder+'/'+config['static-entry-point'];
 
-                        if(fs.existsSync(interface_index)) {
+                        if(!fs.existsSync(interface_folder)) {
+                            methods.back();
+                        } else if(fs.existsSync(interface_index)) {
                             methods.browser(interface_index, function() {
                                 methods.message('Interface is currently shown in browser window', function() {
                                     methods.back();
@@ -451,6 +483,9 @@ var methods = {
                         var config = require(uri+'/config.json');
                         var interface_folder = uri+'/'+config['static-root'];
                         var interface_index = interface_folder+'/'+config['static-entry-point'];
+
+                        methods.explore(interface_folder);
+                        return;
 
                         if (fs.existsSync(interface_folder)) {
 
@@ -564,7 +599,7 @@ function ask(question) {
 
     var que = question.message;
     if(selected) {
-        question.message = 'Server : "'+selected+'" - '+que;
+        question.message = 'Inode : "'+selected+'" - '+que;
     }
 
     inquirer.prompt(question).then(function (answers) {
@@ -1014,7 +1049,7 @@ var cluster = {
                 run[config.name].push(proc.pid);
 
             } else {
-                console.log('Server seems broken, no app.js found'.yellow,'Abort'.red);
+                console.log('Inode seems broken, no app.js found'.yellow,'Abort'.red);
             }
 
         }
@@ -1110,12 +1145,22 @@ function main() {
 
                     ask({
                         type: 'list',
-                        message: 'Choose a server',
+                        message: 'Select an inode',
                         before : function() {
                             selected = '';
                         },
                         choices: function() {
-                            return Object.keys(config.servers).concat(Object.keys(config.disabled))
+                            if(!config.servers) config.servers = {};
+                            if(!config.disabled) config.disabled = {};
+
+                            var active = Object.keys(config.servers);
+                            var inactive = Object.keys(config.disabled);
+
+                            for (let i in inactive) {
+                                inactive[i] = colors.gray(inactive[i]);
+                            }
+
+                            return active.concat(inactive)
                         }
                     });
 
