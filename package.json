@@ -3,6 +3,7 @@
     "ascii-art": "^1.1.1",
     "colors": "^1.1.2",
     "empty-dir": "^0.2.1",
+    "extfs": "0.0.7",
     "findit": "^2.0.0",
     "fs-extra": "^1.0.0",
     "gitclone": "^2.0.0",

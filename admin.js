@@ -11,6 +11,7 @@ const jsonfile = require('jsonfile')
 const mkdirp = require('mkdirp');
 const fs = require('fs');
 const fse = require('fs-extra');
+const fsee = require('extfs');
 const path = require('path');
 const child_process = require('child_process');
 const request = require('request');
@@ -86,34 +87,61 @@ var select = {
         'inode interface' : function(name) {
             var uri = target_dir+'/servers/'+name+'/config.json';
             var config = require(uri);
-            var list = [];
 
-            if (!fs.existsSync(target_dir+'/servers/'+name+'/static')) {
+            function buildList() {
 
-                list.push('create interface');
+                var list = [];
 
-            } else {
-
-                list.push('delete interface');
-
-                if(config['static-content-enabled'] === 'true') {
-                    list.push('disable interface');
-                } else {
-                    list.push('enable interface');
+                if(config['static-entry-point'] && !fs.existsSync(target_dir+'/servers/'+name+'/static/'+config['static-entry-point'])) {
+                    delete config['static-entry-point'];
                 }
 
-                list.push('preview interface');
-                list.push('explore interface');
-                //list.push('plug service to interface');
-                //list.push('unplug service from interface');
+                if (!fs.existsSync(target_dir+'/servers/'+name+'/static')) {
+
+                    list.push('create interface');
+
+                } else {
+
+                    list.push('delete interface');
+
+                    if(config['static-content-enabled'] === 'true') {
+                        list.push('disable interface');
+                    } else {
+                        if(config['static-entry-point']) {
+                            list.push('enable interface');
+                        }
+                    }
+
+                    var empty = fsee.isEmptySync(target_dir+'/servers/'+name+'/static');
+                    if(empty === false) {
+
+                        if(config['static-entry-point']) {
+                            list.push('preview interface');
+                            list.push('change entry-point');
+                            list.push('remove entry-point');
+                        } else {
+                            list.push('define entry-point');
+                        }
+                    }
+
+                    list.push('explore interface');
+
+                    //list.push('plug service to interface');
+                    //list.push('unplug service from interface');
+                }
+
+                return list;
             }
 
             return {
                 type: 'list',
                 message: 'Interface',
-                choices: list
+                choices: buildList
             }
+
+
         },
+
         'inode services' : {
             type: 'list',
             message: 'Services',
@@ -151,17 +179,26 @@ var methods = {
         });
     },
     'delete inode' : function (item) {
-        delete config.servers[item];
-        delete config.disabled[item];
-        fse.remove(target_dir+'/servers/'+item, function (err) {
-            if(err) throw(err);
-            write.file.config(function() {
-                methods.message('Inode '+item+' has been deleted successfully!', function() {
-                    history.shift();
-                    methods.back();
+        var confirmed = null;
+        while (confirmed !== 'true' && confirmed !== 'false') {
+            confirmed = promptSync('?'.green+' Confirm "'+item+'" deletion [true|false]: '.white);
+        }
+
+        if(confirmed === 'true') {
+            delete config.servers[item];
+            delete config.disabled[item];
+            fse.remove(target_dir+'/servers/'+item, function (err) {
+                if(err) throw(err);
+                write.file.config(function() {
+                    methods.message('Inode '+item+' has been deleted successfully!', function() {
+                        history.shift();
+                        methods.back();
+                    });
                 });
             });
-        });
+        } else {
+            methods.back();
+        }
     },
     'back' : function() {
 
@@ -230,7 +267,7 @@ var methods = {
             msg = 'Explore '+furi.green;
         }
 
-        methods['list-files-in-dir'](uri, function(files) { 
+        methods['list-files-in-dir'](uri, function(files) {
 
             function resolve() {
                 ask({
@@ -361,65 +398,133 @@ var methods = {
                         });
                     });
                 },
-                'define entry-point' : function(uri,cbk) {
-                    methods.message(colors.yellow('WARNING : The interface entry point is not set.'+
-                                '\nThe app gives you the ability to choose one below'), function() {
-                        function defineEntryPoint(fpath) {
+                'remove entry-point' : function(name,cbk) {
+                    var uri = target_dir+'/servers/'+name;
+                    delete require.cache[uri+'/config.json'];
+                    var _config = require(uri+'/config.json');
+                    delete _config['static-entry-point'];
+                    write.file.uri(uri+'/config.json', _config, function() {
+                        methods.message(colors.yellow('Entry point enabled\nThe current entry-point is '+_config['static-entry-point']), function() {
+                            if(cbk) {
+                                cbk();
+                            } else {
+                                methods.back();
+                            }
+                        });
+                    });
+                },
+                'change entry-point': function(name,cbk) {
+                    methods['define entry-point'](name,cbk);
+                },
+                'define entry-point' : function(name,cbk) {
 
-                            methods.explore(fpath, 'Select a new entry-point', ['select file'], function(choice, furi) {
+                    var uri = target_dir+'/servers/'+name;
+                    delete require.cache[uri+'/config.json'];
+                    var _config = require(uri+'/config.json');
 
-                                if (choice === 'select file') {
-                                    //HERE
+                    function handle(files,p) {
+                        ask({
+                            type: 'list',
+                            message: 'Choose an entry-point for the interface',
+                            choices: files.sort(),
+                            callback : function(file) {
+                                isDirectory(p+'/'+file, function(err, dir) {
+                                    if (err) throw err;
+                                    if(dir === true) {
+                                        list_dir(p+'/'+file);
+                                    } else {
+                                        var furi = p+'/'+file;
+                                        var pattern = new RegExp('.*static/');
+                                        _config['static-entry-point'] = furi.replace(pattern,'');
+                                        write.file.uri(uri+'/config.json', _config, function() {
+                                            methods.message(colors.yellow('Entry point enabled\nThe current entry-point is '+_config['static-entry-point']), function() {
 
-                                    history.shift();
+                                                methods.back();
+                                            });
+                                        });
+                                    }
+                                });
 
-                                    ask({
-                                        type: 'list',
-                                        message: colors.green('The file '+path.basename(furi)+' will be the new entry point of the interface. Confirm?'),
-                                        default : 'yes',
-                                                  choices : ['yes','no'],
-                                                  callback : function(answ) {
+                            }
 
-                                                      history.shift();
-                                                      if(answ === 'yes') {
-                                                          var pattern = new RegExp('.*static/');
-                                                          config['static-entry-point'] = furi.replace(pattern,'');
-                                                          //TODO handle ../ better, below
-                                                          write.file.uri(uri+'/../config.json', config, function() {
-                                                              console.log(uri+'/static/'+config['static-entry-point']);
-                                                              methods.browser(uri+'/static/'+config['static-entry-point'], function() {
+                        });
+                    }
 
-                                                                  methods.message('Entry point enabled\n', function() {
-                                                                      if(cbk) {
-                                                                          cbk();
-                                                                      } else {
-                                                                          methods.back();
-                                                                      }
-                                                                  });
-                                                              });
-                                                          });
+                    function list_dir (p){
 
-                                                      } else {
-                                                          defineEntryPoint(uri.replace(path.basename(uri)));
-                                                      }
-                                                  }
+                        methods['list-files-in-dir'](p, function(files) {
+
+                            if (!files.length) {
+
+                                            handle(files,p);
+
+                            } else {
+                                for(let i=0; i<files.length; i++) {
+                                    isDirectory(p+'/'+files[i], function(err, dir) {
+                                        if(dir) {
+                                            files[i] = files[i].green;
+                                        } else {
+                                            files[i] = files[i].yellow;
+                                        }
+
+
+                                        if(i+1 === files.length) {
+
+                                            handle(files,p);
+
+                                        }
                                     });
 
-                                }
 
+                                }
+                            }
+
+
+                        });
+                    }
+
+                    list_dir(uri+'/static');
+                },
+                'define entry-pointOLD' : function(name,cbk) {
+
+                    var uri = target_dir+'/servers/'+name;
+                    delete require.cache[uri+'/config.json'];
+                    var _config = require(uri+'/config.json');
+
+                    console.log(colors.yellow('The current entry-point is '+_config['static-entry-point']));
+
+                    methods.explore(uri+'/static', 'Select a new entry-point', ['select file'], function(choice, furi) {
+
+                        if (choice === 'select file') {
+
+                            history.shift();
+                            history.shift();
+
+                            var pattern = new RegExp('.*static/');
+                            _config['static-entry-point'] = furi.replace(pattern,'');
+                            write.file.uri(uri+'/config.json', _config, function() {
+                                methods.message(colors.yellow('Entry point enabled\nThe current entry-point is '+_config['static-entry-point']), function() {
+
+                                    console.log(colors.yellow());
+
+                                    if(cbk) {
+                                        cbk();
+                                    } else {
+                                        methods.back();
+                                    }
+                                });
                             });
+
                         }
 
-                        defineEntryPoint(uri);
-
                     });
+
                 },
                     'create interface' : function(name) {
                         var uri = target_dir+'/servers/'+name;
                         delete require.cache[uri+'/config.json'];
                         var _config = require(uri+'/config.json');
-                        _config['static-root'] = 'static';
-                        if (!fs.existsSync(uri+'/'+_config['static-root'])) {
+                        if (!fs.existsSync(uri+'/static')) {
                             mkdirp(uri+'/static', function(err) { 
                                 if (err) throw err;
                             });
@@ -438,7 +543,6 @@ var methods = {
                         delete require.cache[uri+'/config.json'];
                         var _config = require(uri+'/config.json');
                         _config['static-content-enabled'] = 'false';
-                        if(_config['static-root']) delete _config['static-root'];
                         if(_config['static-entry-point']) delete _config['static-entry-point'];
                         if(_config['static-origin']) delete _config['static-origin'];
                         if (fs.existsSync(uri+'/static')) {
@@ -455,23 +559,15 @@ var methods = {
                         var uri = target_dir+'/servers/'+name;
                         delete require.cache[uri+'/config.json'];
                         var config = require(uri+'/config.json');
-                        var interface_folder = uri+'/'+config['static-root'];
+                        var interface_folder = uri+'/static';
                         var interface_index = interface_folder+'/'+config['static-entry-point'];
 
                         if(!fs.existsSync(interface_folder)) {
                             methods.back();
-                        } else if(fs.existsSync(interface_index)) {
+                        } else {
                             methods.browser(interface_index, function() {
                                 methods.message('Interface is currently shown in browser window', function() {
                                     methods.back();
-                                });
-                            });
-                        } else {
-                            methods['define entry-point'](interface_folder, function() {
-                                methods.browser(interface_index, function(msg) {
-                                    methods.message(msg+'interface is currently shown in browser window', function() {
-                                        methods.back();
-                                    });
                                 });
                             });
                         }
@@ -481,7 +577,7 @@ var methods = {
                         var uri = target_dir+'/servers/'+name;
                         delete require.cache[uri+'/config.json'];
                         var config = require(uri+'/config.json');
-                        var interface_folder = uri+'/'+config['static-root'];
+                        var interface_folder = uri+'/static';
                         var interface_index = interface_folder+'/'+config['static-entry-point'];
 
                         methods.explore(interface_folder);
@@ -489,17 +585,10 @@ var methods = {
 
                         if (fs.existsSync(interface_folder)) {
 
-                            if (!fs.existsSync(interface_index)) {
-                                methods['define entry-point'](interface_folder,function() {
-                                    methods.back();
-                                });
-                            } else {
-                                methods.explore(interface_folder);
-                            }
+                            methods.explore(interface_folder);
 
                         } else {
-                            methods.message(colors.red('Error occured : '+interface_folder+', the folder doesn\'t exist in config.\n'+
-                                        'Please, double check entry "static-root" in : '+uri+'/config.json\n'+
+                            methods.message(colors.red('Error occured : '+interface_folder+' doesn\'t exist.\n'+
                                         'Abort.'), function() {
                                 methods.back();
                             });
@@ -591,7 +680,7 @@ function ask(question) {
     var back = "back";
     question.name = 'q';
 
-    if(question.choices) {
+    if(question.choices && question.choices.push) {
         question.choices.push(
                 back
                 );
@@ -1336,7 +1425,7 @@ function main() {
                                                         if(err) console.error(err);
                                                         console.log(colors.green('Inode '+resp.name+' has been installed!'));
                                                         if(resp.static === 'true') {
-                                                            emptyDir(target_dir+'/servers/'+resp.name+'/'+_config['static-root'], 
+                                                            emptyDir(target_dir+'/servers/'+resp.name+'/static', 
                                                                     function(err, result) {
                                                                         if (err) {
                                                                             console.error(err);
@@ -1345,8 +1434,7 @@ function main() {
                                                                         if(result){
                                                                             console.log(colors.yellow('Interface '+
                                                                                         'is activated, but empty. '+
-                                                                                        'Place client-side files into : "'+
-                                                                                        _config['static-root']+'".'));
+                                                                                        'Place client-side files into : "static".'));
                                                                         }
 
                                                                         main();
@@ -1399,10 +1487,9 @@ function main() {
 
                                         if(_config['static-content-enabled'] === 'true') {
 
-                                            _config['static-root'] = 'static';
                                             _config['static-entry-point'] = 'index.html';
 
-                                            mkdirp(target_dir+'/servers/'+resp.name+'/'+_config['static-root'], function(err) { 
+                                            mkdirp(target_dir+'/servers/'+resp.name+'/static', function(err) { 
                                                 if (err) throw err;
                                             });
                                         } 
@@ -1412,7 +1499,7 @@ function main() {
                                             isOnline(function(err, online) {
 
                                                 _config['static-origin'] = resp['static-app-url'];
-                                                var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/'+_config['static-root']);
+                                                var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/static');
 
                                                 if (online) {
                                                     console.log('Cloning... ');
@@ -1429,8 +1516,6 @@ function main() {
                                                             finder.on('file', function (file) {
                                                                 if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
                                                                     fflag=1;
-                                                                    var pattern = new RegExp('.*'+resp.name+'\/?')
-                                                                        _config['static-root'] = path.dirname(file.replace(pattern,''));
                                                                 } else if (path.basename(file) === 'bower.json') {
                                                                     exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
                                                                         if(error) throw error;
