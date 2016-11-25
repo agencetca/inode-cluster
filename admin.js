@@ -792,7 +792,7 @@ var define = {
     folder : {
         target : function(cbk,args) {
             if(path.basename(__dirname) === 'admin' && path.basename(path.join(__dirname,'/..')) === 'system' ) {
-                target_dir += '/../..';
+                target_dir = __dirname+'/../..';
             } else {
                 target_dir = __dirname;
             }
@@ -936,17 +936,13 @@ var loadMenu = function() {
             ]);
         }
 
-    } else if(isPicoService) {
+    } else if(isServer) {
         choice_menu = choice_menu.concat([
                 "Activate interface",
                 "Add a local functionality",
                 "Expose a local functionality (api)",
                 "Expose a remote functionality",
-                "Build a third-part-server"
-        ]);
-    } else if(isApplication) {
-        choice_menu = choice_menu.concat([
-                "Activate interface",
+                "Build a third-part-server",
                 "Link picoservice"
         ]);
     }
@@ -1451,7 +1447,17 @@ function main() {
                                                     if(err) console.error(err);
 
                                                     var asterisk = '*';//'coz vim sucks
-                                                    exec('mkdir '+target_dir+'/servers/'+resp.name+'/system/admin && cp -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
+                                                    //HERE
+                                                    //
+                                                    mkdirp(target_dir+'/servers/'+resp.name+'/system', function(err) { 
+                                                        if (err) throw err;
+                                                    });
+
+                                                    mkdirp(target_dir+'/servers/'+resp.name+'/system/admin', function(err) { 
+                                                        if (err) throw err;
+                                                    });
+
+                                                    exec('cp -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
                                                         if(err) console.error(err);
                                                         console.log(colors.green('Inode '+resp.name+' has been installed!'));
                                                         if(resp.static === 'true') {
@@ -2208,19 +2214,10 @@ readArguments(function(args) {
                 config.name = cluster_name;
                 config.type = 'cluster';
 
-            } else {
+            } else if(config.type === 'server') {
 
                 isCluster = false;
                 isServer = true;
-
-                if (config.type === 'picoservice') { 
-                    isPicoService = true;
-                } else if (config.type === 'application') { 
-                    isApplication = true;
-                } else { 
-                    throw('Type "'.yellow+config.type.yellow+'" is not supported.'.yellow,'Abort'.red);
-                } 
-
             }
 
             write.file.config(function() {
