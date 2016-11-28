@@ -39,6 +39,7 @@ const github = {
 
 }
 
+var editor = 'vim';
 var config = {};
 var config_file = '';
 var range_port = [8000,10000];
@@ -169,6 +170,392 @@ var select = {
 };
 
 var methods = {
+    thirdpart : {
+        add : function() {
+
+                    var third_part_server = [
+                    {
+                        type: 'input',
+                        name: 'name',
+                        message: 'Server name?*',
+                        validate: function(str){
+                            return !!str;
+                        }
+                    },
+                    {
+                        type: 'input',
+                        name: 'description',
+                        message: 'Description?*',
+                        validate: function(str){
+                            return !!str;
+                        }
+                    },
+                        {
+                            type: 'input',
+                            name: 'owner',
+                            message: 'Owner?*',
+                            validate: function(str){
+                                return !!str;
+                            }
+                        },
+                        {
+                            type: 'input',
+                            name: 'licence',
+                            message: 'Licence?',
+                            default: 'none',
+                                     validate: function(str){
+                                         return !!str;
+                                     }
+                        }
+                    ];
+
+                    mkdirp(target_dir+'/servers/third-part-servers', function(err) { 
+                        if (err) throw err;
+                    });
+
+                    inquirer.prompt(third_part_server).then(function(resp) {
+
+                        if(!config['third-part-servers']) {
+                            config['third-part-servers'] = [];
+                        }
+
+                        config['third-part-servers'].push(resp.name+'.js');
+
+                        define.file.config(function(err) {
+                            if(err) console.error(err)
+                                exec('echo "/*Name : '+
+                                        resp.name+'\ndescription : '+
+                                        resp.description+'\nLicence : '+
+                                        resp.licence +'*/\n" > '+
+                                        target_dir+'/servers/third-part-servers/'+
+                                        resp.name+'.js', (error, stdout, stderr) => {
+
+                                            console.log('Execute '+editor+' '+target_dir+'/servers/third-part-servers/'+resp.name+'.js'); 
+
+                                        });
+                        })
+
+                    });
+
+        }
+    },
+    inode : {
+        add : function() {
+
+                    var _config = {};
+
+                        //ensure_cache(function() {
+                        if (config) { 
+                            if(config['port-range']) {
+                                if(config['port-range'].split && config['port-range'].split('-')) {
+                                    range_port = config['port-range'].split('-');
+                                }
+                            } else {
+                                config['port-range'] = range_port.join('-');
+                            }
+                        } else {
+                            config['port-range'] = range_port.join('-');
+                        }
+
+                        if(!config.servers) {
+                            config.servers = {};
+                        }
+
+                        var range_container = [];
+                        var current_range = '';
+                        var arr = Object.keys(config.servers);
+                        const totalPortNum = parseInt(range_port[1] - range_port[0],10);
+                        const totalServNum = arr.length+1;
+                        var servNum, minNum, maxNum, rangeNum;
+                        for(var i=0; i<totalServNum; i++) {
+                            servNum = i+1;
+                            rangeNum = Math.floor(totalPortNum / totalServNum);
+                            maxNum = parseInt(range_port[0],10) + rangeNum * servNum;
+                            minNum = maxNum - rangeNum;
+                            maxNum--;
+                            range_container.push(minNum+'-'+maxNum);
+                        }
+
+                        current_range = range_container.pop();
+                        var range_item = '';
+                        var tmp_s = [];
+                        for (var serv in config.servers) {
+                            tmp_s.push(serv);
+                            range_container.push(range_item = range_container.shift());
+                            get_available_port(config.servers[serv].split(':')[0],range_item,function(av_port) {
+                                var _serv = tmp_s.shift();
+                                config.servers[_serv] = config.servers[_serv].split(':')[0]+':'+av_port;
+                            });
+                        }
+
+                        get_available_port('localhost',current_range.split('-'),function(next_port) {
+
+                            var server = [
+                            {
+                                type: 'input',
+                                name: 'name',
+                                message: 'Node name?*',
+                                validate: function(str){
+
+                                    if(!str) {
+                                        return 'Node name can\'t be null';
+                                    }
+
+                                    if (fs.existsSync(target_dir+'/servers/'+str)) {
+                                        return 'This name is already taken';
+                                    } else {
+                                        return !!str;
+                                    }
+                                }
+                            },
+                            {
+                                type: 'input',
+                                name: 'description',
+                                message: 'Description?',
+                                default: 'none',
+                                         validate: function(str){
+                                             return !!str;
+                                         }
+                            },
+                                {
+                                    type: 'input',
+                                    name: 'licence',
+                                    message: 'Licence?',
+                                    default: 'none',
+                                             validate: function(str){
+                                                 return !!str;
+                                             }
+                                },
+                                {
+                                    type: 'input',
+                                    name: 'owner',
+                                    message: 'Owner?',
+                                    default: 'none',
+                                             validate: function(str){
+                                                 return !!str;
+                                             }
+                                },
+                                    {
+                                        type: 'input',
+                                        name: 'host',
+                                        message: 'Host and Port Number? [localhost:'+next_port+'] ',
+                                        validate: function(str){
+                                            if(!str) {
+                                                return true;
+                                            } else if(str.split(':').length === 2) {
+                                                return true;
+                                            }
+                                        }
+                                    },
+                                    {
+                                        type: 'input',
+                                        name: 'static',
+                                        message: 'Activate interface?* [true|false]',
+                                        validate: function(str){
+                                            if (str === 'true' || str === 'false') {
+                                                return true;
+                                            }
+                                        }
+                                    }
+                            ];
+
+                            inquirer.prompt(server).then(function(resp) {
+
+                                if(!resp.host) {
+                                    resp.host = 'localhost:'+next_port;
+                                }
+
+                                if(resp.static === 'true') {
+                                    while (!resp['static-app-url'] && resp['static-app-url'] !== ''){
+                                        resp['static-app-url'] = promptSync('?'.green+' Github repository: '.bold.white);
+                                    }
+
+                                    var head = new RegExp('^(https?:\/\/)?github.com\/');
+                                    var tail = new RegExp('\.git$');
+                                    resp['static-app-url'] = resp['static-app-url'].replace(head,'').replace(tail,'');
+
+                                }
+
+                                finalize_process = function() {
+
+                                    write.file.config(function() {
+
+                                        var objs = [];
+                                        for(var serv in config.servers) {
+                                            if(serv === resp.name) {
+                                                _config['port-range'] = current_range;
+                                                jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
+                                                    if(err) console.error(err);
+
+                                                    var asterisk = '*';//'coz vim sucks while editing this code
+                                                    mkdirp(target_dir+'/servers/'+resp.name+'/system', function(err) { 
+                                                        if (err) throw err;
+                                                    });
+
+                                                    mkdirp(target_dir+'/servers/'+resp.name+'/system/admin', function(err) { 
+                                                        if (err) throw err;
+                                                    });
+
+                                                    exec('cp -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
+                                                        if(err) console.error(err);
+                                                        console.log(colors.green('Inode '+resp.name+' has been installed!'));
+                                                        if(resp.static === 'true') {
+                                                            emptyDir(target_dir+'/servers/'+resp.name+'/static', 
+                                                                    function(err, result) {
+                                                                        if (err) {
+                                                                            console.error(err);
+                                                                        }
+
+                                                                        if(result){
+                                                                            console.log(colors.yellow('Interface '+
+                                                                                        'is activated, but empty. '+
+                                                                                        'Place client-side files into : "static".'));
+                                                                        }
+
+                                                                        main();
+
+                                                                    });
+
+                                                        } else {
+                                                            main();
+                                                        }
+                                                    });
+
+                                                });
+
+                                            } else {
+
+                                                objs.push(require(target_dir+'/servers/'+serv+'/config.json'));
+                                                var o = objs.shift();
+                                                o['port-range'] = range_container.shift();
+                                                o['port'] = o['port-range'].split('-')[0];
+                                                jsonfile.writeFile(target_dir+'/servers/'+serv+'/config.json', o, {spaces: 2}, function(err) {
+                                                    if(err) console.error(err);
+                                                });
+
+                                            }
+                                        }
+
+                                    });
+                                }
+
+                                config.servers[resp.name] = resp.host;
+
+                                define.file.config(function(err) {
+                                    if(err) console.error(err);
+
+                                    mkdirp(target_dir+'/servers/', function(err) { 
+                                        if (err) throw err;
+                                    });
+
+                                    var asterisk = '*';//'coz vim sucks while editing this code
+                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
+                                        if(error) console.log(error);
+
+                                        _config.name = resp.name;
+                                        _config.type = 'server';
+                                        _config.owner = resp.owner;
+                                        _config.description = resp.description;
+                                        _config.licence = resp.licence || 'none';
+                                        _config.port = resp.host.split(':')[1];
+                                        _config['static-content-enabled'] = resp.static;
+
+                                        if(_config['static-content-enabled'] === 'true') {
+
+                                            _config['static-entry-point'] = 'index.html';
+
+                                            mkdirp(target_dir+'/servers/'+resp.name+'/static', function(err) { 
+                                                if (err) throw err;
+                                            });
+                                        } 
+
+                                        if(resp['static-app-url']) {
+
+                                            isOnline(function(err, online) {
+
+                                                _config['static-origin'] = resp['static-app-url'];
+                                                var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/static');
+
+                                                if (online) {
+                                                    console.log('Cloning... ');
+                                                    clone(_config["static-origin"], { dest: static_abs_path }, [], (err) => {
+
+                                                        if (err) {
+                                                            console.log('Cloning... error.'.red);
+                                                            //console.error(err)
+                                                            finalize_process();
+                                                        } else {
+                                                            console.log('Cloning... done.');
+                                                            var fflag=0;
+                                                            var finder = require('findit')(static_abs_path);
+                                                            finder.on('file', function (file) {
+                                                                if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
+                                                                    fflag=1;
+                                                                } else if (path.basename(file) === 'bower.json') {
+                                                                    exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
+                                                                        if(error) throw error;
+                                                                    });
+                                                                } else if (path.basename(file) === 'package.json') {
+                                                                    exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
+                                                                        if(error) throw error;
+                                                                    });
+                                                                }
+                                                            });
+                                                            finder.on('error', function (error) {
+                                                                if(error) throw(error);
+                                                            });
+                                                            finder.on('end', function () {
+                                                                finalize_process();
+                                                            });
+                                                        }
+                                                    });
+                                                } else {
+                                                    console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : cd '+static_abs_path+' && npm install && bower install'));
+                                                    finalize_process();
+                                                }
+
+                                            });
+                                        } else {
+                                            finalize_process();
+                                        }
+
+                                    });
+                                });
+                            });
+                        }); 
+                        //});
+
+        },
+        configure : function() {
+
+                    if(!config.servers || (!detect.servers.exist() && !detect.servers.disabled())) {
+                        console.log('No servers available'.red);
+                        main();
+                        return;
+                    }
+
+                    ask({
+                        type: 'list',
+                        message: 'Select an inode',
+                        before : function() {
+                            selected = '';
+                        },
+                        choices: function() {
+                            if(!config.servers) config.servers = {};
+                            if(!config.disabled) config.disabled = {};
+
+                            var active = Object.keys(config.servers);
+                            var inactive = Object.keys(config.disabled);
+
+                            for (let i in inactive) {
+                                inactive[i] = colors.gray(inactive[i]);
+                            }
+
+                            return active.concat(inactive)
+                        }
+                    });
+        }
+    },
     'enable inode' : function (item) {
         if(!config.disabled) config.disabled = {};
         if(!config.servers) config.servers = {};
@@ -245,8 +632,8 @@ var methods = {
         });
     },
     'edit' : function(uri, cbk) {
-        var editor = spawn('vim', [uri], {stdio: 'inherit'})
-            editor.on('exit', function() {
+        var edit = spawn(editor, [uri], {stdio: 'inherit'})
+            edit.on('exit', function() {
                 cbk();
             });
     },
@@ -631,8 +1018,50 @@ var methods = {
                                 });
                             },
                             'add service' : function(name) {
-                                methods.message('add', function() {
-                                    methods.back();
+
+                                pwd = target_dir+'/servers/'+name;
+
+                                var service = [
+                                {
+                                    type: 'input',
+                                    name: 'name',
+                                    message: 'Service name?*',
+                                    validate: function(str){
+                                        return !!str;
+                                    }
+                                },
+                                {
+                                    type: 'input',
+                                    name: 'description',
+                                    message: 'Description? (none)',
+                                    default : 'none',
+                                    validate: function(str){
+                                        return !!str;
+                                    }
+                                },
+                                    {
+                                        type: 'input',
+                                        name: 'developper',
+                                        message: 'Developper? (anon)',
+                                        default : 'anon',
+                                        validate: function(str){
+                                            return !!str;
+                                        }
+                                    },
+                                    {
+                                        type: 'input',
+                                        name: 'licence',
+                                        message: 'Licence? (none)',
+                                        default: 'none',
+                                                 validate: function(str){
+                                                     return !!str;
+                                                 }
+                                    }
+                                ];
+
+                                inquirer.prompt(service).then(function(resp) {
+                                    //HERE
+                                    console.log(resp);
                                 });
                             },
                             'edit service' : function(name) {
@@ -938,7 +1367,7 @@ var loadMenu = function() {
 
     } else if(isServer) {
         choice_menu = choice_menu.concat([
-                "Activate interface",
+                "Configure a node",
                 "Add a local functionality",
                 "Expose a local functionality (api)",
                 "Expose a remote functionality",
@@ -1245,39 +1674,15 @@ function main() {
                     new inquirer.Separator(),
                     "Reset cache",
                     "Update cluster",
-                    "Quit"
+                    "Quit",
+                    new inquirer.Separator()
             ])
         }]).then(function (answers) {
             switch(answers.options) {
 
                 case 'Configure a node':
 
-                    if(!config.servers || (!detect.servers.exist() && !detect.servers.disabled())) {
-                        console.log('No servers available'.red);
-                        main();
-                        return;
-                    }
-
-                    ask({
-                        type: 'list',
-                        message: 'Select an inode',
-                        before : function() {
-                            selected = '';
-                        },
-                        choices: function() {
-                            if(!config.servers) config.servers = {};
-                            if(!config.disabled) config.disabled = {};
-
-                            var active = Object.keys(config.servers);
-                            var inactive = Object.keys(config.disabled);
-
-                            for (let i in inactive) {
-                                inactive[i] = colors.gray(inactive[i]);
-                            }
-
-                            return active.concat(inactive)
-                        }
-                    });
+                    return methods.inode.configure();
 
                     break;
 
@@ -1301,368 +1706,13 @@ function main() {
 
                 case 'Add a node':
 
-                    var _config = {};
-
-                        //ensure_cache(function() {
-                        if (config) { 
-                            if(config['port-range']) {
-                                if(config['port-range'].split && config['port-range'].split('-')) {
-                                    range_port = config['port-range'].split('-');
-                                }
-                            } else {
-                                config['port-range'] = range_port.join('-');
-                            }
-                        } else {
-                            config['port-range'] = range_port.join('-');
-                        }
-
-                        if(!config.servers) {
-                            config.servers = {};
-                        }
-
-                        var range_container = [];
-                        var current_range = '';
-                        var arr = Object.keys(config.servers);
-                        const totalPortNum = parseInt(range_port[1] - range_port[0],10);
-                        const totalServNum = arr.length+1;
-                        var servNum, minNum, maxNum, rangeNum;
-                        for(var i=0; i<totalServNum; i++) {
-                            servNum = i+1;
-                            rangeNum = Math.floor(totalPortNum / totalServNum);
-                            maxNum = parseInt(range_port[0],10) + rangeNum * servNum;
-                            minNum = maxNum - rangeNum;
-                            maxNum--;
-                            range_container.push(minNum+'-'+maxNum);
-                        }
-
-                        current_range = range_container.pop();
-                        var range_item = '';
-                        var tmp_s = [];
-                        for (var serv in config.servers) {
-                            tmp_s.push(serv);
-                            range_container.push(range_item = range_container.shift());
-                            get_available_port(config.servers[serv].split(':')[0],range_item,function(av_port) {
-                                var _serv = tmp_s.shift();
-                                config.servers[_serv] = config.servers[_serv].split(':')[0]+':'+av_port;
-                            });
-                        }
-
-                        get_available_port('localhost',current_range.split('-'),function(next_port) {
-
-                            var server = [
-                            {
-                                type: 'input',
-                                name: 'name',
-                                message: 'Node name?*',
-                                validate: function(str){
-
-                                    if(!str) {
-                                        return 'Node name can\'t be null';
-                                    }
-
-                                    if (fs.existsSync(target_dir+'/servers/'+str)) {
-                                        return 'This name is already taken';
-                                    } else {
-                                        return !!str;
-                                    }
-                                }
-                            },
-                            {
-                                type: 'input',
-                                name: 'description',
-                                message: 'Description?',
-                                default: 'none',
-                                         validate: function(str){
-                                             return !!str;
-                                         }
-                            },
-                                {
-                                    type: 'input',
-                                    name: 'licence',
-                                    message: 'Licence?',
-                                    default: 'none',
-                                             validate: function(str){
-                                                 return !!str;
-                                             }
-                                },
-                                {
-                                    type: 'input',
-                                    name: 'owner',
-                                    message: 'Owner?',
-                                    default: 'none',
-                                             validate: function(str){
-                                                 return !!str;
-                                             }
-                                },
-                                    {
-                                        type: 'input',
-                                        name: 'host',
-                                        message: 'Host and Port Number? [localhost:'+next_port+'] ',
-                                        validate: function(str){
-                                            if(!str) {
-                                                return true;
-                                            } else if(str.split(':').length === 2) {
-                                                return true;
-                                            }
-                                        }
-                                    },
-                                    {
-                                        type: 'input',
-                                        name: 'static',
-                                        message: 'Activate interface?* [true|false]',
-                                        validate: function(str){
-                                            if (str === 'true' || str === 'false') {
-                                                return true;
-                                            }
-                                        }
-                                    }
-                            ];
-
-                            inquirer.prompt(server).then(function(resp) {
-
-                                if(!resp.host) {
-                                    resp.host = 'localhost:'+next_port;
-                                }
-
-                                if(resp.static === 'true') {
-                                    while (!resp['static-app-url'] && resp['static-app-url'] !== ''){
-                                        resp['static-app-url'] = promptSync('?'.green+' Github repository: '.bold.white);
-                                    }
-
-                                    var head = new RegExp('^(https?:\/\/)?github.com\/');
-                                    var tail = new RegExp('\.git$');
-                                    resp['static-app-url'] = resp['static-app-url'].replace(head,'').replace(tail,'');
-
-                                }
-
-                                finalize_process = function() {
-
-                                    write.file.config(function() {
-
-                                        var objs = [];
-                                        for(var serv in config.servers) {
-                                            if(serv === resp.name) {
-                                                _config['port-range'] = current_range;
-                                                jsonfile.writeFile(target_dir+'/servers/'+resp.name+'/config.json', _config, {spaces: 2}, function(err) {
-                                                    if(err) console.error(err);
-
-                                                    var asterisk = '*';//'coz vim sucks
-                                                    //HERE
-                                                    //
-                                                    mkdirp(target_dir+'/servers/'+resp.name+'/system', function(err) { 
-                                                        if (err) throw err;
-                                                    });
-
-                                                    mkdirp(target_dir+'/servers/'+resp.name+'/system/admin', function(err) { 
-                                                        if (err) throw err;
-                                                    });
-
-                                                    exec('cp -rf '+cache_folder+'/'+github.repo["cluster-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name+'/system/admin', function (error, stdout, stderr) {
-                                                        if(err) console.error(err);
-                                                        console.log(colors.green('Inode '+resp.name+' has been installed!'));
-                                                        if(resp.static === 'true') {
-                                                            emptyDir(target_dir+'/servers/'+resp.name+'/static', 
-                                                                    function(err, result) {
-                                                                        if (err) {
-                                                                            console.error(err);
-                                                                        }
-
-                                                                        if(result){
-                                                                            console.log(colors.yellow('Interface '+
-                                                                                        'is activated, but empty. '+
-                                                                                        'Place client-side files into : "static".'));
-                                                                        }
-
-                                                                        main();
-
-                                                                    });
-
-                                                        } else {
-                                                            main();
-                                                        }
-                                                    });
-
-                                                });
-
-                                            } else {
-
-                                                objs.push(require(target_dir+'/servers/'+serv+'/config.json'));
-                                                var o = objs.shift();
-                                                o['port-range'] = range_container.shift();
-                                                o['port'] = o['port-range'].split('-')[0];
-                                                jsonfile.writeFile(target_dir+'/servers/'+serv+'/config.json', o, {spaces: 2}, function(err) {
-                                                    if(err) console.error(err);
-                                                });
-
-                                            }
-                                        }
-
-                                    });
-                                }
-
-                                config.servers[resp.name] = resp.host;
-
-                                define.file.config(function(err) {
-                                    if(err) console.error(err);
-
-                                    mkdirp(target_dir+'/servers/', function(err) { 
-                                        if (err) throw err;
-                                    });
-
-                                    var asterisk = '*';//'coz vim sucks
-                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
-                                        if(error) console.log(error);
-
-                                        _config.name = resp.name;
-                                        _config.type = 'server';
-                                        _config.owner = resp.owner;
-                                        _config.description = resp.description;
-                                        _config.licence = resp.licence || 'none';
-                                        _config.port = resp.host.split(':')[1];
-                                        _config['static-content-enabled'] = resp.static;
-
-                                        if(_config['static-content-enabled'] === 'true') {
-
-                                            _config['static-entry-point'] = 'index.html';
-
-                                            mkdirp(target_dir+'/servers/'+resp.name+'/static', function(err) { 
-                                                if (err) throw err;
-                                            });
-                                        } 
-
-                                        if(resp['static-app-url']) {
-
-                                            isOnline(function(err, online) {
-
-                                                _config['static-origin'] = resp['static-app-url'];
-                                                var static_abs_path = path.join(target_dir+'/servers/'+resp.name+'/static');
-
-                                                if (online) {
-                                                    console.log('Cloning... ');
-                                                    clone(_config["static-origin"], { dest: static_abs_path }, [], (err) => {
-
-                                                        if (err) {
-                                                            console.log('Cloning... error.'.red);
-                                                            //console.error(err)
-                                                            finalize_process();
-                                                        } else {
-                                                            console.log('Cloning... done.');
-                                                            var fflag=0;
-                                                            var finder = require('findit')(static_abs_path);
-                                                            finder.on('file', function (file) {
-                                                                if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
-                                                                    fflag=1;
-                                                                } else if (path.basename(file) === 'bower.json') {
-                                                                    exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
-                                                                        if(error) throw error;
-                                                                    });
-                                                                } else if (path.basename(file) === 'package.json') {
-                                                                    exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
-                                                                        if(error) throw error;
-                                                                    });
-                                                                }
-                                                            });
-                                                            finder.on('error', function (error) {
-                                                                if(error) throw(error);
-                                                            });
-                                                            finder.on('end', function () {
-                                                                finalize_process();
-                                                            });
-                                                        }
-                                                    });
-                                                } else {
-                                                    console.log(colors.red('\nInternet connexion is not active, neither npm nor bower installation will be performed.\nWhen internet connexion will be ready, please execute : cd '+static_abs_path+' && npm install && bower install'));
-                                                    finalize_process();
-                                                }
-
-                                            });
-                                        } else {
-                                            finalize_process();
-                                        }
-
-                                    });
-                                });
-                            });
-                        }); 
-                        //});
-
+                    return methods.inode.add();
 
                     break;
 
                 case 'Build a third-part-server':
 
-                    var third_part_server = [
-                    {
-                        type: 'input',
-                        name: 'name',
-                        message: 'Server name?*',
-                        validate: function(str){
-                            return !!str;
-                        }
-                    },
-                    {
-                        type: 'input',
-                        name: 'description',
-                        message: 'Description?*',
-                        validate: function(str){
-                            return !!str;
-                        }
-                    },
-                        {
-                            type: 'input',
-                            name: 'owner',
-                            message: 'Owner?*',
-                            validate: function(str){
-                                return !!str;
-                            }
-                        },
-                        {
-                            type: 'input',
-                            name: 'licence',
-                            message: 'Licence?',
-                            default: 'none',
-                                     validate: function(str){
-                                         return !!str;
-                                     }
-                        },
-                            {
-                                type: 'input',
-                                name: 'editor',
-                                message: 'Your favorite code editor?',
-                                default: 'vim',
-                                         validate: function(str){
-                                             return !!str;
-                                         }
-                            }
-                    ];
-
-                    mkdirp(target_dir+'/servers/third-part-servers', function(err) { 
-                        if (err) throw err;
-                    });
-
-                    inquirer.prompt(third_part_server).then(function(resp) {
-
-                        if(!config['third-part-servers']) {
-                            config['third-part-servers'] = [];
-                        }
-
-                        config['third-part-servers'].push(resp.name+'.js');
-
-                        define.file.config(function(err) {
-                            if(err) console.error(err)
-                                exec('echo "/*Name : '+
-                                        resp.name+'\ndescription : '+
-                                        resp.description+'\nLicence : '+
-                                        resp.licence +'*/\n" > '+
-                                        target_dir+'/servers/third-part-servers/'+
-                                        resp.name+'.js', (error, stdout, stderr) => {
-
-                                            console.log('Execute '+resp.editor+' '+target_dir+'/servers/third-part-servers/'+resp.name+'.js'); 
-
-                                        });
-                        })
-
-                    });
+                    return methods.thirdpart.add();
 
                     break;
 
@@ -1701,15 +1751,7 @@ function main() {
                                      validate: function(str){
                                          return !!str;
                                      }
-                        },
-                            {
-                                type: 'input',
-                                name: 'editor',
-                                message: 'Your favorite code editor?*',
-                                validate: function(str){
-                                    return !!str;
-                                }
-                            }
+                        }
                     ];
 
                     inquirer.prompt(middleware).then(function(resp) {
@@ -1730,7 +1772,7 @@ function main() {
                                                 if(err) {
                                                     return console.log(err);
                                                 }
-                                                var child = child_process.spawn(resp.editor, [target_dir+'/middlewares/'+resp.name+'.js'], {
+                                                var child = child_process.spawn(editor, [target_dir+'/middlewares/'+resp.name+'.js'], {
                                                     stdio: 'inherit'
                                                 });
 
