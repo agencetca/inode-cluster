@@ -641,6 +641,7 @@ var methods = {
 
         pwd = uri;//important
 
+
         if(typeof cbk !== 'function' && typeof msg === 'function' && typeof choices !== 'function')  {
             cbk = msg;
             msg = false;
