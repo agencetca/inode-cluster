@@ -51,6 +51,7 @@ var choice_menu = [];
 var run = {};
 var run_folder = '';
 var run_file = '';
+var overview_file = '';
 var cache_folder = '';
 var args = false;
 var pwd = '';
@@ -2029,6 +2030,7 @@ var loadMenu = function() {
                 ]);
             } else {
                 choice_menu = choice_menu.concat([
+                    "Cluster overview",
                     "Restart the cluster",
                     "Stop the cluster"
                 ]);
@@ -2252,6 +2254,7 @@ var cluster = {
 
         var timer = 0;
         var failed = 0;
+        var started = [];
 
         for(var serv in config.servers) {
             if(fs.existsSync(target_dir+'/servers/'+serv+'/app.js')) {
@@ -2261,6 +2264,10 @@ var cluster = {
                 const proc = spawn('node', [target_dir+'/servers/'+serv+'/app.js',false], {
                     detached: true,
                     stdio: ['ignore',process.stdout,process.stdout]
+                });
+
+                proc.on('data', function (data) {
+                      console.log('stdout: ' + data);
                 });
 
                 proc.on('close', function(code, signal) {
@@ -2277,6 +2284,9 @@ var cluster = {
                 }
 
                 run[config.name].push(proc.pid);
+                started.push({
+                    name : serv
+                });
 
             } else {
                 console.log('Inode seems broken, no app.js found'.yellow,'Abort'.red);
@@ -2299,6 +2309,10 @@ var cluster = {
                         }
                     });
                 } else {
+
+                    jsonfile.writeFile(overview_file, {servers : started}, {spaces: 2}, function(err) {
+                    });
+
                     if(cbk) {
                         cbk();
                         return;
@@ -2327,6 +2341,11 @@ var cluster = {
 
         jsonfile.writeFile(run_file, run, {spaces: 2}, function(err) {
             if(err) throw(err);
+
+            var started = [];
+            jsonfile.writeFile(overview_file, {servers : started}, {spaces: 2}, function(err) {
+            });
+
             setTimeout(function() {
                 if(cbk) {
                     cbk();
@@ -2341,6 +2360,12 @@ var cluster = {
     restart : function() {
         cluster.stop(function() {
             cluster.start();
+        });
+    },
+    overview : function() {
+        var ov = require(overview_file);
+        methods.message(ov.servers, function() {
+            methods.back();
         });
     }
 }
@@ -2376,6 +2401,12 @@ function main() {
                 case 'Start the cluster':
 
                     cluster.start();
+
+                    break;
+
+                case 'Cluster overview':
+
+                    cluster.overview();
 
                     break;
 
@@ -2453,6 +2484,7 @@ readArguments(function(args) {
         define.folder.target(function() {
             run_folder = target_dir+'/system';
             run_file = run_folder+'/run.json';
+            overview_file = run_folder+'/overview.json';
 
             if (!fs.existsSync(run_folder)) {
                 mkdirp(run_folder, function(err) { 
