@@ -1727,7 +1727,8 @@ var methods = {
                             return methods.item.remove(target_dir+'/servers/'+name+'/middlewares/');
                           },
                           'expose a remote functionality' : function(name) {
-                            return methods.middleware.remote.expose(target_dir+'/servers/'+name);
+                              //ICIII
+                            return methods.remote.expose(target_dir+'/servers/'+name);
                           },
                           'list routes' : function(name) {
                             return methods.item.list(target_dir+'/servers/'+name+'/routes/');
