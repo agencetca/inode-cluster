@@ -17,6 +17,7 @@
     "progress": "^1.1.8",
     "readline-sync": "^1.4.5",
     "request": "^2.78.0",
+    "spawn-sync": "^1.0.15",
     "stripcolorcodes": "^0.1.0",
     "valid-url": "^1.0.9"
   }

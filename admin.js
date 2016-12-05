@@ -22,6 +22,7 @@ const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
 const spawn = require('child_process').spawn;
+const spawnSync = require('child_process').spawnSync;
 const emptyDir = require('empty-dir');
 const art = require("ascii-art");
 const ProgressBar = require('progress');
@@ -76,7 +77,8 @@ var select = {
                     'manage configuration',
                     'manage interface',
                     'manage functionalities',
-                    'manage routes'
+                    'manage routes',
+                    'manage services'
                 ];
             }
         },
@@ -165,14 +167,13 @@ var select = {
                 'view functionality',
                 'add functionality',
                 'edit functionality',
-                'remove functionality',
-                'expose a remote functionality'
+                'remove functionality'
             ]
         },
 
         'manage routes' : {
             type: 'list',
-            message: 'Services',
+            message: 'Routes',
             choices: [
                 'list routes',
                 'view route',
@@ -182,10 +183,339 @@ var select = {
             ]
         },
 
+        'manage services' : {
+            type: 'list',
+            message: 'Services',
+            choices: [
+                'list services',
+                'view service',
+                'add service',
+                'edit service',
+                'remove service'
+            ]
+        }
+
     }
 };
 
 var methods = {
+    services : {
+        list : function(td) {
+            return methods.item.list(td+'/routes/');
+        },
+        add : function(td) {
+
+            let message = '';
+            message += '*** Welcome to the service creator ***\n';
+            message += 'A service is composed by one or multiple functionalities,\n';
+            message += 'And one keyword that leads to the functionalities.\n';
+            message += 'Once the keyword is called by a program, the functionalities execute on a specified order\n';
+            message += '\n';
+            message += 'So here are the steps involved in a service creation :\n';
+            message += '- supply one or multiple functionalities name(s)\n';
+            message += '- write the code for each functionalities (could be also done after creation)\n';
+            message += '- tell the order in which the functionalities will be executed\n';
+            message += '- supply a keyword that will lead to the functionalities, in the right order\n';
+            message += 'And you\'re done :)';
+
+            methods.message(message, function() {
+
+                inquirer.prompt([{
+                    type: 'input',
+                    name: 'order',
+                    message : 'Supply one or multiple functionalities name(s) separate by space',
+                }]).then(function (resp) {
+                    let _sel = resp.order.split(' ');
+                    let sel = [];
+                    let later = [];
+
+                    function describe() {
+                        let developper,description,licence;
+                        let tmp = [];
+                        let o = {};
+
+                        for(let i=0; i<sel.length; i++) {
+
+                            tmp.push(sel[i]);
+                            let _tmp = tmp.shift();
+
+                            o[_tmp] = {};
+                            o[_tmp].name = sel[i];
+                            console.log(colors.green('\nFunctionality : "'+o[_tmp].name)+'"');
+                            o[_tmp].description = promptSync('?'.bold.green+' Description (none): ');
+                            o[_tmp].developper = promptSync('?'.bold.green+' Developper (anon): ');
+                            o[_tmp].licence = promptSync('?'.bold.green+' Licence (none): ');
+
+                            if(!o[_tmp].description) description = '(none)';
+                            if(!o[_tmp].developper) developper = '(anon)';
+                            if(!o[_tmp].licence) licence = '(none)';
+
+                            fs.writeFile(td+'/middlewares/'+o[_tmp].name+'.js', 
+                                    '/*\n'+
+                                       ' * Description : '+o[_tmp].description+'\n'+
+                                       ' * Author : '+o[_tmp].developper+'\n'+
+                                       ' * Licence : '+o[_tmp].licence+'\n'+
+                                       '*/\n\n'+
+                                    'module.exports = function(req, res, next) {'+
+                                        '\n\t'+
+                                            '\n\t'+
+                                            '\n\tnext();'+
+                                            '\n\t'+
+                                            '\n};', function(err) {
+
+                                                if(i === sel.length-1) {
+                                                    console.log();//important
+                                                    edition();
+                                                }
+
+                                            });
+
+                        }
+                    }
+
+                    function edition() {
+                        for(let i=0; i<sel.length; i++) {
+                            var confirmed = null;
+                            while (confirmed !== 'true' && confirmed !== 'false') {
+                                confirmed = promptSync('?'.bold.green+' Do you want to edit '+_sel[i]+'.js'+' now? [true|false]: ');
+                            }
+
+                            if(confirmed === 'true') {
+                                var child = spawnSync(editor, [td+'/middlewares/'+_sel[i]+'.js'], { 
+                                    stdio: 'inherit'
+                                });
+                            } else {
+                                later.push(td+'/middlewares/'+_sel[i]+'.js');
+                            }
+                        }
+
+                        if(later && later.length) {
+                            console.log(colors.yellow('\n***Scripts you still have to edit***'));
+                            for(let u=0; u<later.length; u++) {
+                                console.log(colors.yellow(later[u]));
+                            }
+                            console.log();//important
+                        }
+
+                        methods.middleware.local.expose(td,'Service created');
+                        //AKI
+
+                    }
+
+                    console.log();//important
+
+                    //TODO handle backslashed expressions, like \t
+                    var tmp = [];
+                    for(let i=0; i<_sel.length; i++) {
+                        if(_sel[i]) {
+
+                            tmp.push(_sel[i]);
+                            sel.push(_sel[i]);
+                        }
+
+                        var _tmp = tmp.shift();
+                        var exist = false;
+
+                        try {
+                            exist = fs.statSync(td+'/middlewares/'+_tmp+'.js');
+                        } catch(e) {
+                            //do nothing
+                        }
+
+                        if(exist) {
+                            console.log(colors.yellow('File exists : '+td+'/middlewares/'+_tmp+'.js (unchanged)'));
+                        } else {
+                            console.log(colors.green('File creation : '+td+'/middlewares/'+_tmp+'.js'));
+                        }
+
+                        if(i === _sel.length-1) {
+                            describe();
+                        }
+                    }
+
+                });
+
+            });
+
+        },
+        edit : function(td) {
+
+            var pattern = new RegExp('.js$');
+            var answers = [];
+            fs.readdir(td+'/routes', function (err, files) {
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
+                }
+
+                ask({
+                    type: 'list',
+                    message : 'What service do you want to edit?',
+                    choices: answers,
+                    callback : function(answer) {
+
+                        ask({
+                            type: 'list',
+                            message : 'What part of the service do you wish to edit?',
+                            choices: [
+                                'I want to edit the router',
+                                'I want to edit a functionality'
+                            ],
+                            callback : function(asw) {
+
+                                if(asw === 'I want to edit the router') {
+                                    var child = child_process.spawn(editor, [td+'/routes/'+answer+'.js'], {
+                                        stdio: 'inherit'
+                                    });
+
+                                    child.on('exit', function (e, code) {
+                                        methods.back();
+                                    });
+                                } else {
+                                    let matches = [];
+                                    fs.readFile(td+'/routes/'+answer+'.js', 'utf8', function (err,data) {
+                                          if (err) {
+                                                  return console.log(err);
+                                                    }
+                                          data.replace(/middlewares\["(.*?)"\]/g, function (string, match) {
+                                              matches.push(match);
+                                          });
+
+                                          ask({
+                                              type: 'list',
+                                              message : 'Select one',
+                                              choices: matches,
+                                              callback : function(aa) {
+                                                  var child = child_process.spawn(editor, [td+'/middlewares/'+aa+'.js'], {
+                                                      stdio: 'inherit'
+                                                  });
+
+                                                  child.on('exit', function (e, code) {
+                                                      methods.back();
+                                                  });
+                                              }
+                                          });
+
+                                    });
+                                }
+
+                            }
+                        });
+
+                    }
+                });
+
+            });
+        },
+        view : function(td) {
+
+            var pattern = new RegExp('.js$');
+            var answers = [];
+            fs.readdir(td+'/routes', function (err, files) {
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
+                }
+
+                ask({
+                    type: 'list',
+                    message : 'What service do you want to view?',
+                    choices: answers,
+                    callback : function(answer) {
+
+                        ask({
+                            type: 'list',
+                            message : 'What part of the service do you wish to view?',
+                            choices: [
+                                'I want to view the router',
+                                'I want to view a functionality'
+                            ],
+                            callback : function(asw) {
+
+                                if(asw === 'I want to view the router') {
+                                    var child = child_process.spawn(viewer, [td+'/routes/'+answer+'.js'], {
+                                        stdio: 'inherit'
+                                    });
+
+                                    child.on('exit', function (e, code) {
+                                        methods.back();
+                                    });
+                                } else {
+                                    let matches = [];
+                                    fs.readFile(td+'/routes/'+answer+'.js', 'utf8', function (err,data) {
+                                          if (err) {
+                                                  return console.log(err);
+                                                    }
+                                          data.replace(/middlewares\["(.*?)"\]/g, function (string, match) {
+                                              matches.push(match);
+                                          });
+
+                                          ask({
+                                              type: 'list',
+                                              message : 'Select one',
+                                              choices: matches,
+                                              callback : function(aa) {
+                                                  var child = child_process.spawn(viewer, [td+'/middlewares/'+aa+'.js'], {
+                                                      stdio: 'inherit'
+                                                  });
+
+                                                  child.on('exit', function (e, code) {
+                                                      methods.back();
+                                                  });
+                                              }
+                                          });
+
+                                    });
+                                }
+
+                            }
+                        });
+
+                    }
+                });
+
+            });
+        },
+        remove : function(td) {
+            var pattern = new RegExp('.js$');
+            var answers = [];
+            fs.readdir(td+'/routes', function (err, files) {
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
+                }
+
+                //IKI
+                ask({
+                    type: 'list',
+                    message : 'What service do you want to remove?',
+                    choices: answers,
+                    callback : function(answer) {
+
+                        var confirmed = null;
+                        while (confirmed !== 'true' && confirmed !== 'false') {
+                            confirmed = promptSync('?'.bold.green+colors.bold.red(' Confirm "'+td+'/routes/'+answer+'" deletion [true|false]: '));
+                        }
+
+                        if(confirmed === 'true') {
+                            var child = child_process.spawn('rm', [td+'/routes/'+answer+'.js'], {
+                                stdio: 'inherit'
+                            });
+
+                            child.on('exit', function (e, code) {
+                                methods.message('Service '+answer+' has been removed!\n'+colors.yellow('Tips: check for calls of '+answer+'into the interface and delete them'), function() {
+                                    history.shift();
+                                    methods.back();
+                                });
+                            });
+                        } else {
+                            methods.message('Abort.'.red, function() {
+                                methods.back();
+                            });
+                        }
+                    }
+                });
+            });
+
+        },
+    },
     item : {
         add : function(td) {
             return methods.middleware.local.add(td);
@@ -341,7 +671,7 @@ var methods = {
     },
     middleware : {
         local : {
-            expose : function(td) {
+            expose : function(td, custom_msg) {
 
                 //HERE
                 if (!fs.existsSync(td+'/middlewares/') || emptyDir.sync(td+'/middlewares/')) {
@@ -432,7 +762,11 @@ var methods = {
                                                                             return console.log(err);
                                                                         }
 
-                                                                        methods.message('The file was saved!', function() {
+                                                                        if(!custom_msg) {
+                                                                            custom_msg = 'The file was saved!';
+                                                                        }
+
+                                                                        methods.message(custom_msg, function() {
                                                                             methods.back();
                                                                         });
 
@@ -1727,10 +2061,6 @@ var methods = {
                           'remove functionality' : function(name) {
                             return methods.item.remove(target_dir+'/servers/'+name+'/middlewares/');
                           },
-                          'expose a remote functionality' : function(name) {
-                              //ICIII
-                            return methods.remote.expose(target_dir+'/servers/'+name);
-                          },
                           'list routes' : function(name) {
                             return methods.item.list(target_dir+'/servers/'+name+'/routes/');
                            },
@@ -1745,6 +2075,21 @@ var methods = {
                             },
                            'remove route' : function(name) {
                             return methods.item.remove(target_dir+'/servers/'+name+'/routes/');
+                           },
+                          'list services' : function(name) {
+                            return methods.services.list(target_dir+'/servers/'+name);
+                           },
+                           'view service' : function(name) {
+                            return methods.services.view(target_dir+'/servers/'+name);
+                           },
+                           'add service' : function(name) {
+                                return methods.services.add(target_dir+'/servers/'+name);
+                            },
+                           'edit service' : function(name) {
+                            return methods.services.edit(target_dir+'/servers/'+name);
+                            },
+                           'remove service' : function(name) {
+                            return methods.services.remove(target_dir+'/servers/'+name);
                            },
     'routes' : function(name) {
         methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
@@ -1812,6 +2157,13 @@ function ask(question) {
     question.name = 'q';
 
     if(question.choices && question.choices.push) {
+
+        //TODO better solution for quick and dirty below : back appears twice and more on undetermined situation
+        let index = question.choices.indexOf('back');
+        if(index > -1) {
+            question.choices.splice(index, 1);
+        }//end quick and dirty
+
         question.choices.push(
                 back,
                 main
