@@ -165,7 +165,7 @@ var select = {
                 'add functionality',
                 'edit functionality',
                 'remove functionality',
-                'Expose a remote functionality'
+                'expose a remote functionality'
             ]
         },
 
@@ -568,11 +568,11 @@ var methods = {
     },
         remote : {
 
-            expose : function() {
+            expose : function(td) {
 
                 var _route = {};
 
-                fs.readdir(target_dir+'/middlewares/', function (err, files) {
+                fs.readdir(td+'/middlewares/', function (err, files) {
 
                     _route.middlewares = [];
 
@@ -658,8 +658,8 @@ var methods = {
 
                                                 function finish_process_wo_middleware () {
 
-                                                    overWrite(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
-                                                        fs.writeFile(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
+                                                    overWrite(td+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
+                                                        fs.writeFile(td+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
                                                                 'const request = require("request");\n\n'+
                                                                 'module.exports = function(app, config, middlewares) {\n\n'+
                                                                     '\tapp.'+_route['local-method']+'("/'+_route['local-name']+'", function(req, res) {\n\n'+
@@ -741,8 +741,8 @@ var methods = {
                                                                         _route.targets = '';
                                                                     }
 
-                                                                    overWrite(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
-                                                                        fs.writeFile(target_dir+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
+                                                                    overWrite(td+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', function() {
+                                                                        fs.writeFile(td+'/routes/'+_route['local-name']+'-'+_route['local-method']+'.js', ''+
                                                                                 'const request = require("request");\n\n'+
                                                                                 'module.exports = function(app, config, middlewares) {\n\n'+
                                                                                     '\tapp.'+_route['local-method']+'("/'+_route['local-name']+'",'+_route.targets+' function(req, res) {\n\n'+
@@ -829,8 +829,8 @@ var methods = {
                                                     target = '"'+_route.host+'"';
                                                 }
 
-                                                overWrite(target_dir+'/routes/'+answers['local-name']+'-'+_route.method+'.js', function() {
-                                                    fs.writeFile(target_dir+'/routes/'+answers['local-name']+'-'+_route.method+'.js', ''+
+                                                overWrite(td+'/routes/'+answers['local-name']+'-'+_route.method+'.js', function() {
+                                                    fs.writeFile(td+'/routes/'+answers['local-name']+'-'+_route.method+'.js', ''+
                                                             'const httpProxy = require("http-proxy");\n'+
                                                             'const proxy = httpProxy.createProxyServer({});\n\n'+
                                                             'module.exports = function(app, config, middlewares) {\n\n'+
@@ -1725,6 +1725,9 @@ var methods = {
                           },
                           'remove functionality' : function(name) {
                             return methods.item.remove(target_dir+'/servers/'+name+'/middlewares/');
+                          },
+                          'expose a remote functionality' : function(name) {
+                            return methods.middleware.remote.expose(target_dir+'/servers/'+name);
                           },
                           'list routes' : function(name) {
                             return methods.item.list(target_dir+'/servers/'+name+'/routes/');
