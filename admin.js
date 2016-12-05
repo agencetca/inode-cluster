@@ -40,6 +40,7 @@ const github = {
 }
 
 var editor = 'vim';
+var viewer = 'less';
 var config = {};
 var config_file = '';
 var range_port = [8000,10000];
@@ -73,7 +74,8 @@ var select = {
                     'delete inode',
                     'manage configuration',
                     'manage interface',
-                    'manage services'
+                    'manage functionalities',
+                    'manage routes'
                 ];
             }
         },
@@ -154,15 +156,27 @@ var select = {
 
         },
 
-        'manage services' : {
+        'manage functionalities' : {
+            type: 'list',
+            message: 'Functionalities',
+            choices: [
+                'list functionalities',
+                'view functionality',
+                'add functionality',
+                'edit functionality',
+                'remove functionality'
+            ]
+        },
+
+        'manage routes' : {
             type: 'list',
             message: 'Services',
             choices: [
-                'list services',
-                'view service',
-                'add service',
-                'edit service',
-                'remove service'
+                'list routes',
+                'view route',
+                'add route',
+                'edit route',
+                'remove route'
             ]
         }
 
@@ -170,7 +184,387 @@ var select = {
 };
 
 var methods = {
-    func : {
+    item : {
+        add : function(td) {
+            return methods.middleware.local.add(td);
+        },
+        view : function(td) {
+            var pattern = new RegExp('.js$');
+
+            var readSync = function(){
+
+                let answers = [];
+                let files = fs.readdirSync(td);
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
+                }
+
+                return answers; 
+
+            }
+
+            fs.readdir(td, function (err, files) {
+
+                ask({
+                    type: 'list',
+                    message : 'Which item(s) do you want to view?',
+                    choices: readSync,
+                    callback : function(answer) {
+
+                        var child = child_process.spawn(viewer, [td+'/'+answer+'.js'], {
+                            stdio: 'inherit'
+                        });
+
+                        child.on('exit', function (e, code) {
+                            history.shift();
+                            methods.back();
+                        });
+
+                    }
+                });
+
+            });
+
+        },
+        list : function(td) {
+
+            var pattern = new RegExp('.js$');
+            var answer = '';
+            fs.readdir(td, function (err, files) {
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answer += files[i].replace(pattern,'')+'\n';
+                }
+
+                methods.message(answer, function() {
+                    methods.back();
+                });
+
+            });
+
+        },
+        edit : function(td) {
+            var pattern = new RegExp('.js$');
+
+            var readSync = function(){
+
+                let answers = [];
+                let files = fs.readdirSync(td);
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
+                }
+
+                return answers; 
+
+            }
+
+            fs.readdir(td, function (err, files) {
+
+                ask({
+                    type: 'list',
+                    message : 'Which item(s) do you want to edit?',
+                    choices: readSync,
+                    callback : function(answer) {
+
+                        var child = child_process.spawn(editor, [td+'/'+answer+'.js'], {
+                            stdio: 'inherit'
+                        });
+
+                        child.on('exit', function (e, code) {
+                        methods.message('Item '+answer+' has been edited!', function() {
+                                history.shift();
+                                methods.back();
+                            });
+                        });
+
+                    }
+                });
+
+            });
+
+        },
+        remove : function(td) {
+            var pattern = new RegExp('.js$');
+
+            var readSync = function(){
+
+                let answers = [];
+                let files = fs.readdirSync(td);
+                for(let i=0; i<files.length; i++) {
+                    if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
+                }
+
+                return answers; 
+
+            }
+
+            fs.readdir(td, function (err, files) {
+
+                ask({
+                    type: 'list',
+                    message : 'Which item(s) do you want to remove?',
+                    choices: readSync,
+                    callback : function(answer) {
+
+                        var confirmed = null;
+                        while (confirmed !== 'true' && confirmed !== 'false') {
+                            confirmed = promptSync('?'.bold.green+colors.bold.red(' Confirm "'+td+'/'+answer+'" deletion [true|false]: '));
+                        }
+
+                        if(confirmed === 'true') {
+
+                            var child = child_process.spawn('rm', [td+'/'+answer+'.js'], {
+                                stdio: 'inherit'
+                            });
+
+                            child.on('exit', function (e, code) {
+                                methods.message('Item '+answer+' has been removed!', function() {
+                                    history.shift();
+                                    methods.back();
+                                });
+                            });
+
+                        } else {
+
+                                methods.message('Abort.', function() {
+                                    history.shift();
+                                    methods.back();
+                                });
+                        }
+
+                    }
+                });
+
+            });
+        }
+    },
+    middleware : {
+        local : {
+            expose : function(td) {
+
+                //HERE
+                if (!fs.existsSync(td+'/middlewares/') || emptyDir.sync(td+'/middlewares/')) {
+                    console.log('Create a middleware first'.red);
+                    main();
+                    return;
+                }
+
+                var _route = {};
+                var createRoute = function(resp,td,back) {
+
+                    if (!fs.existsSync(td+'/routes/')) {
+                        mkdirp(td+'/routes/', function(err) { 
+                            if (err) throw err;
+                        });
+                    }
+
+                    _route.method = resp.method;
+
+                    switch(resp.method) {
+
+                        case 'get':
+                        case 'post':
+
+                            fs.readdir(td+'/middlewares/', function (err, files) {
+
+                                if(err) throw(err);
+
+                                var middlewares = [];
+                                for(var i=0; i<files.length; i++) {
+                                    if(path.extname(files[i]) === '.js') {
+                                        middlewares.push({ 'name' : files[i].slice(0,-3) });
+                                    }
+                                }
+
+                                if(middlewares.length) {
+
+                                    inquirer.prompt([{
+                                        type: 'checkbox',
+                                        name: 'middlewares',
+                                        message : 'Which middleware(s) do you want to expose?',
+                                        choices: middlewares
+                                    }]).then(function (answers) {
+
+                                        _route.middlewares = answers.middlewares;
+
+                                        for(var md in _route.middlewares) {
+                                            console.log(parseInt(md,10)+1 +')'+_route.middlewares[md]);
+                                        }
+
+                                        inquirer.prompt([{
+                                            type: 'input',
+                                            name: 'order',
+                                            message : 'Specify order?'
+                                        }]).then(function (answers) {
+
+                                            var chain = '';
+                                            for(var i=0; i<answers.order.length; i++) {
+                                                if(i === answers.order.length-1) {
+                                                    chain += 'middlewares["'+_route.middlewares[parseInt(answers.order[i],10)-1]+'"]';
+                                                } else {
+                                                    chain += 'middlewares["'+_route.middlewares[parseInt(answers.order[i],10)-1]+'"]->';
+                                                }
+                                            }
+
+                                            console.log(chain);
+                                            _route.target = (chain.split('->')[chain.split('->').length-1]).split('.')[1];
+                                            _route.targets = chain.split('->').join(', ');
+
+                                            inquirer.prompt([{
+                                                type: 'input',
+                                                name: 'main',
+                                                message : 'Route name?',
+                                                default : _route.target 
+                                            }]).then(function (answers) {
+
+                                                overWrite(td+'/routes/'+answers.main+'-'+_route.method+'.js', function() {
+                                                    fs.writeFile(td+'/routes/'+answers.main+'-'+_route.method+'.js', ''+
+                                                            'module.exports = function(app, config, middlewares) {'+
+                                                                '\n'+
+                                                                    '\n\tapp.'+_route.method+'("/'+answers.main+'", '+_route.targets+', function(req, res) {'+
+                                                                        '\n\n\t\tres.end();'+
+                                                                            '\n\t});'+
+                                                                    '\n'+
+                                                                    '\n};'+
+                                                                    '', function(err) {
+                                                                        if(err) {
+                                                                            return console.log(err);
+                                                                        }
+
+                                                                        methods.message('The file was saved!', function() {
+                                                                            methods.back();
+                                                                        });
+
+                                                                    }); 
+                                                });
+
+                                            });
+                                        });
+
+                                    });
+
+                                } else {
+                                    if(back !== false) {
+                                        methods.message('Sorry no functionality available.', function() {
+                                            methods.back();
+                                        });
+                                    }
+                                }
+                            });
+
+                            
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                inquirer.prompt([{
+                    type: 'list',
+                    name: 'method',
+                    message : 'select a method',
+                    choices: ['get', 'post']
+                }]).then(function (answers) {
+
+                    return createRoute(answers,td);
+
+                }); 
+
+            },
+
+            add : function(td, data) {
+
+                var middlewareCreate = function(resp,td,back) {
+                    if (!fs.existsSync(td+'/middlewares/')) {
+                        mkdirp(td+'/middlewares/', function(err) { 
+                            if (err) throw err;
+                        });
+                    }
+
+                    overWrite(td+'/middlewares/'+resp.name+'.js', function() {
+                        fs.writeFile(td+'/middlewares/'+resp.name+'.js', 
+                                '/*\n'+
+                                   ' * description : '+resp.description+'\n'+
+                                   ' * Author : '+resp.developper+'\n'+
+                                   ' * Licence : '+resp.licence+'\n'+
+                                   '*/\n\n'+
+                                'module.exports = function(req, res, next) {'+
+                                    '\n\t'+
+                                        '\n\t'+
+                                        '\n\tnext();'+
+                                        '\n\t'+
+                                        '\n};', function(err) {
+                                            if(err) {
+                                                return console.log(err);
+                                            }
+                                            var child = child_process.spawn(editor, [td+'/middlewares/'+resp.name+'.js'], {
+                                                stdio: 'inherit'
+                                            });
+
+                                            child.on('exit', function (e, code) {
+                                                if(back !== false) {
+                                                    methods.message('The file was saved!', function() {
+                                                        methods.back();
+                                                    });
+                                                }
+                                            });
+                                        }); 
+                    });
+                }
+
+                if(!data) {
+
+                    inquirer.prompt([
+                    {
+                        type: 'input',
+                        name: 'name',
+                        message: 'Middleware name?*',
+                        validate: function(str){
+                            return !!str;
+                        }
+                    },
+                    {
+                        type: 'input',
+                        name: 'description',
+                        message: 'Description?',
+                        default : 'none',
+                                  validate: function(str){
+                                      return !!str;
+                                  }
+                    },
+                        {
+                            type: 'input',
+                            name: 'developper',
+                            message: 'Developper?',
+                            default : 'none',
+                                      validate: function(str){
+                                          return !!str;
+                                      }
+                        },
+                        {
+                            type: 'input',
+                            name: 'licence',
+                            message: 'Licence?',
+                            default: 'none',
+                                     validate: function(str){
+                                         return !!str;
+                                     }
+                        }
+
+                    ]).then(function(resp) {
+
+                        middlewareCreate(resp,td);
+
+                    });
+
+                } else {
+
+                        middlewareCreate(data,td,false);
+                }
+
+
+            }
+        }
+    },
         remote : {
             expose : function() {
 
@@ -290,7 +684,10 @@ var methods = {
                                                                                 return console.log(err);
                                                                             }
 
-                                                                            back_to_main("The file was saved!");
+                                                                            methods.message('The file was saved!', function() {
+                                                                                methods.back();
+                                                                            });
+
                                                                         }); 
 
                                                     });
@@ -370,7 +767,9 @@ var methods = {
                                                                                                 return console.log(err);
                                                                                             }
 
-                                                                                            back_to_main("The file was saved!");
+                                                                                            methods.message('The file was saved!', function() {
+                                                                                                methods.back();
+                                                                                            });
                                                                                         }); 
 
                                                                     });
@@ -445,7 +844,9 @@ var methods = {
                                                                             return console.log(err);
                                                                         }
 
-                                                                        back_to_main("The file was saved!");
+                                                                        methods.message('The file was saved!', function() {
+                                                                            methods.back();
+                                                                        });
 
                                                                     }); 
 
@@ -466,190 +867,6 @@ var methods = {
                 });
             }
         },
-        local : {
-            expose : function() {
-
-                if (!fs.existsSync(target_dir+'/middlewares/')) {
-                    console.log('Create a middleware first'.red);
-                    main();
-                    return;
-                }
-
-                var _route = {};
-
-                inquirer.prompt([{
-                    type: 'list',
-                    name: 'method',
-                    message : 'select a method',
-                    choices: ['get', 'post']
-                }]).then(function (answers) {
-
-                    _route.method = answers.method;
-
-                    switch(answers.method) {
-                        case 'get':
-                        case 'post':
-
-                            fs.readdir(target_dir+'/middlewares/', function (err, files) {
-
-                                if(err) throw(err);
-
-                                var middlewares = [];
-                                for(var i=0; i<files.length; i++) {
-                                    if(path.extname(files[i]) === '.js') {
-                                        middlewares.push({ 'name' : files[i].slice(0,-3) });
-                                    }
-                                }
-
-                                if(middlewares.length) {
-
-                                    inquirer.prompt([{
-                                        type: 'checkbox',
-                                        name: 'middlewares',
-                                        message : 'Which middleware(s) do you want to expose?',
-                                        choices: middlewares
-                                    }]).then(function (answers) {
-
-                                        _route.middlewares = answers.middlewares;
-
-                                        for(var md in _route.middlewares) {
-                                            console.log(parseInt(md,10)+1 +')'+_route.middlewares[md]);
-                                        }
-
-                                        inquirer.prompt([{
-                                            type: 'input',
-                                            name: 'order',
-                                            message : 'Specify order?'
-                                        }]).then(function (answers) {
-
-                                            var chain = '';
-                                            for(var i=0; i<answers.order.length; i++) {
-                                                if(i === answers.order.length-1) {
-                                                    chain += 'middlewares["'+_route.middlewares[parseInt(answers.order[i],10)-1]+'"]';
-                                                } else {
-                                                    chain += 'middlewares["'+_route.middlewares[parseInt(answers.order[i],10)-1]+'"]->';
-                                                }
-                                            }
-
-                                            console.log(chain);
-                                            _route.target = (chain.split('->')[chain.split('->').length-1]).split('.')[1];
-                                            _route.targets = chain.split('->').join(', ');
-
-                                            inquirer.prompt([{
-                                                type: 'input',
-                                                name: 'main',
-                                                message : 'Route name?',
-                                                default : _route.target 
-                                            }]).then(function (answers) {
-
-                                                overWrite(target_dir+'/routes/'+answers.main+'-'+_route.method+'.js', function() {
-                                                    fs.writeFile(target_dir+'/routes/'+answers.main+'-'+_route.method+'.js', ''+
-                                                            'module.exports = function(app, config, middlewares) {'+
-                                                                '\n'+
-                                                                    '\n\tapp.'+_route.method+'("/'+answers.main+'", '+_route.targets+', function(req, res) {'+
-                                                                        '\n\n\t\tres.end();'+
-                                                                            '\n\t});'+
-                                                                    '\n'+
-                                                                    '\n};'+
-                                                                    '', function(err) {
-                                                                        if(err) {
-                                                                            return console.log(err);
-                                                                        }
-
-                                                                        back_to_main("The file was saved!");
-                                                                    }); 
-                                                });
-
-                                            });
-                                        });
-
-                                    });
-
-                                } else {
-                                    back_to_main('Sorry no middleware available.');
-                                }
-                            });
-
-                            break;
-                        default:
-                            break;
-                    }
-
-                }); 
-
-            },
-            add : function() {
-
-                var middleware = [
-                {
-                    type: 'input',
-                    name: 'name',
-                    message: 'Middleware name?*',
-                    validate: function(str){
-                        return !!str;
-                    }
-                },
-                {
-                    type: 'input',
-                    name: 'description',
-                    message: 'Description?*',
-                    validate: function(str){
-                        return !!str;
-                    }
-                },
-                    {
-                        type: 'input',
-                        name: 'developper',
-                        message: 'Developper?*',
-                        validate: function(str){
-                            return !!str;
-                        }
-                    },
-                    {
-                        type: 'input',
-                        name: 'licence',
-                        message: 'Licence?',
-                        default: 'none',
-                                 validate: function(str){
-                                     return !!str;
-                                 }
-                    }
-                ];
-
-                inquirer.prompt(middleware).then(function(resp) {
-
-                    overWrite(target_dir+'/middlewares/'+resp.name+'.js', function() {
-                        fs.writeFile(target_dir+'/middlewares/'+resp.name+'.js', 
-                                '/*\n'+
-                                   ' * description : '+resp.description+'\n'+
-                                   ' * Author : '+resp.developper+'\n'+
-                                   ' * Licence : '+resp.licence+'\n'+
-                                   '*/\n\n'+
-                                'module.exports = function(req, res, next) {'+
-                                    '\n\t'+
-                                        '\n\t'+
-                                        '\n\tnext();'+
-                                        '\n\t'+
-                                        '\n};', function(err) {
-                                            if(err) {
-                                                return console.log(err);
-                                            }
-                                            var child = child_process.spawn(editor, [target_dir+'/middlewares/'+resp.name+'.js'], {
-                                                stdio: 'inherit'
-                                            });
-
-                                            child.on('exit', function (e, code) {
-                                                back_to_main('The file was saved!');
-                                            });
-                                        }); 
-                    });
-
-
-                });
-
-            }
-        }
-    },
     thirdpart : {
         add : function() {
 
@@ -1061,7 +1278,7 @@ var methods = {
     'delete inode' : function (item) {
         var confirmed = null;
         while (confirmed !== 'true' && confirmed !== 'false') {
-            confirmed = promptSync('?'.green+' Confirm "'+item+'" deletion [true|false]: '.white);
+            confirmed = promptSync('?'.bold.green+colors.bold.red(' Confirm "'+item+'" deletion [true|false]: '));
         }
 
         if(confirmed === 'true') {
@@ -1087,6 +1304,10 @@ var methods = {
         } else {
             main();
         }
+    },
+    'back to main' : function(message) {
+        back_to_main(message);
+
     },
     'message' : function(msg, cbk) {
 
@@ -1487,78 +1708,36 @@ var methods = {
                                 });
                             });
                         },
-                            'list services' : function(name) {
-                                methods.message('list', function() {
-                                    methods.back();
-                                });
+                        'list functionalities' : function(name) {
+                            return methods.item.list(target_dir+'/servers/'+name+'/middlewares/');
+                        },
+                        'view functionality' : function(name) {
+                            return methods.item.view(target_dir+'/servers/'+name+'/middlewares/');
+                         },
+                         'add functionality' : function(name) {
+                             return methods.item.add(target_dir+'/servers/'+name);
+                          },
+                          'edit functionality' : function(name) {
+                            return methods.item.edit(target_dir+'/servers/'+name+'/middlewares/');
+                          },
+                          'remove functionality' : function(name) {
+                            return methods.item.remove(target_dir+'/servers/'+name+'/middlewares/');
+                          },
+                          'list routes' : function(name) {
+                            return methods.item.list(target_dir+'/servers/'+name+'/routes/');
+                           },
+                           'view route' : function(name) {
+                            return methods.item.view(target_dir+'/servers/'+name+'/routes/');
+                           },
+                           'add route' : function(name) {
+                                return methods.middleware.local.expose(target_dir+'/servers/'+name);
                             },
-                            'view service' : function(name) {
-                                methods.message('view', function() {
-                                    methods.back();
-                                });
+                           'edit route' : function(name) {
+                            return methods.item.edit(target_dir+'/servers/'+name+'/routes/');
                             },
-                            'add service' : function(name) {
-
-                                pwd = target_dir+'/servers/'+name;
-
-                                var service = [
-                                {
-                                    type: 'input',
-                                    name: 'name',
-                                    message: 'Service name?*',
-                                    validate: function(str){
-                                        return !!str;
-                                    }
-                                },
-                                {
-                                    type: 'input',
-                                    name: 'description',
-                                    message: 'Description? (none)',
-                                    default : 'none',
-                                    validate: function(str){
-                                        return !!str;
-                                    }
-                                },
-                                    {
-                                        type: 'input',
-                                        name: 'developper',
-                                        message: 'Developper? (anon)',
-                                        default : 'anon',
-                                        validate: function(str){
-                                            return !!str;
-                                        }
-                                    },
-                                    {
-                                        type: 'input',
-                                        name: 'licence',
-                                        message: 'Licence? (none)',
-                                        default: 'none',
-                                                 validate: function(str){
-                                                     return !!str;
-                                                 }
-                                    }
-                                ];
-
-                                inquirer.prompt(service).then(function(resp) {
-                                    //HERE
-
-                                    //Init middleware
-                                    
-                                    //Create a route
-                                    
-                                    console.log(resp);
-                                });
-                            },
-                            'edit service' : function(name) {
-                                methods.message('edit', function() {
-                                    methods.back();
-                                });
-                            },
-                                'remove service' : function(name) {
-                                methods.message('remove', function() {
-                                    methods.back();
-                                });
-                                },
+                           'remove route' : function(name) {
+                            return methods.item.remove(target_dir+'/servers/'+name+'/routes/');
+                           },
     'routes' : function(name) {
         methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
             var sel = [];
@@ -1621,11 +1800,13 @@ function ask(question) {
     }
 
     var back = "back";
+    var main = "back to main";
     question.name = 'q';
 
     if(question.choices && question.choices.push) {
         question.choices.push(
-                back
+                back,
+                main
                 );
     }
 
@@ -1644,6 +1825,10 @@ function ask(question) {
         }
         if(answers['q'] === back) {
             methods['back']();
+            return;
+        }
+        if(answers['q'] === main) {
+            methods['back to main']();
             return;
         } else {
 
@@ -1963,11 +2148,23 @@ var ensure_cache = function(cbk,verbose) {
 }
 
 var reset_cache = function(cbk, verbose) {
-    delete_cache(function() {
-        build_cache(function() {
-            cbk();
+
+    var confirmed = null;
+    while (confirmed !== 'true' && confirmed !== 'false') {
+        confirmed = promptSync('?'.bold.green+colors.bold.red(' Confirm cache reset? [true|false]: '));
+    }
+
+    if(confirmed === true) {
+        delete_cache(function() {
+            build_cache(function() {
+                cbk();
+            }, false);
         }, false);
-    }, false);
+    } else {
+        methods.message('Abort'.red, function() {
+            methods.back();
+        });
+    }
 }
 
 //Process
@@ -1989,7 +2186,8 @@ function large_display(message) {
 }
 
 function back_to_main(message) {
-    large_display(message);
+    if(message) large_display(message);
+    history = [];
     main();
 }
 
