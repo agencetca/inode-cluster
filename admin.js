@@ -164,7 +164,8 @@ var select = {
                 'view functionality',
                 'add functionality',
                 'edit functionality',
-                'remove functionality'
+                'remove functionality',
+                'Expose a remote functionality'
             ]
         },
 
@@ -178,7 +179,7 @@ var select = {
                 'edit route',
                 'remove route'
             ]
-        }
+        },
 
     }
 };
@@ -566,6 +567,7 @@ var methods = {
         }
     },
         remote : {
+
             expose : function() {
 
                 var _route = {};
@@ -603,6 +605,7 @@ var methods = {
                                 name: 'target',
                                 message : 'Select a remote api to use :',
                                 choices : body.split('\n')
+
                             }]).then(function (answers) {
 
                                 _route.method = answers.target.split(' ')[1].toLowerCase();
@@ -2041,8 +2044,7 @@ var loadMenu = function() {
                 "Add a local functionality",
                 "Expose a local functionality (api)",
                 "Expose a remote functionality",
-                "Build a third-part-server",
-                "Link picoservice"
+                "Build a third-part-server"
         ]);
     }
 }
