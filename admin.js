@@ -199,13 +199,79 @@ var select = {
 };
 
 var methods = {
+    clean : {
+        inode : {
+            middlewares : function(td,auto) {
+                let tdm = td+'/middlewares';
+                let tdr = td+'/routes';
+
+                let mid = {};
+                let rou = {};
+
+                let pattern = new RegExp('\.js$');
+
+                fs.readdir(tdr, function (err, files) {
+                    for(let i=0; i<files.length; i++) {
+                        if(files[i].match(pattern)) {
+
+                            fs.readFile(tdr+'/'+files[i], 'utf8', function (err,data) {
+                                if (err) {
+                                    return console.log(err);
+                                }
+                                data.replace(/middlewares\["(.*?)"\]/g, function (string, match) {
+                                    rou[match] = 1;
+                                    if(i === files.length-1) {
+                                        fs.readdir(tdm, function (err, fil) {
+                                            for(let u=0; u<fil.length; u++) {
+                                                if(rou[fil[u]] && fil[u].match(pattern)) {
+                                                    if(!rou[fil[u].replace(pattern,'')]) {
+                                                        if(auto !== false) {
+
+                                                            var child = child_process.spawn('rm', [td+'/middlewares/'+rou[fil[u]]+'.js'], {
+                                                                stdio: 'inherit'
+                                                            });
+
+                                                            child.on('exit', function (e, code) {
+                                                                console.log('ok');
+                                                            });
+
+                                                        } else {
+                                                            //TODO
+                                                        }
+                                                        //console.log(fil[u].replace(pattern,''));
+                                                        //AKIKI
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+
+                                });
+
+                            });
+
+                        }
+                    }
+                });
+
+                //IDAKIKI
+            }
+        },
+    },
     services : {
         list : function(td) {
+            methods.clean.inode.middlewares(td);
+            return;
             return methods.item.list(td+'/routes/');
         },
         add : function(td) {
 
+            let sel = [];
+            let later = [];
+            //let tmp = [];
+            let o = {};
             let message = '';
+
             message += '*** Welcome to the service creator ***\n';
             message += 'A service is composed by one or multiple functionalities,\n';
             message += 'And one keyword that leads to the functionalities.\n';
@@ -220,120 +286,162 @@ var methods = {
 
             methods.message(message, function() {
 
-                inquirer.prompt([{
-                    type: 'input',
-                    name: 'order',
-                    message : 'Supply one or multiple functionalities name(s) separate by space',
-                }]).then(function (resp) {
-                    let _sel = resp.order.split(' ');
-                    let sel = [];
-                    let later = [];
+                function describe() {
 
-                    function describe() {
-                        let developper,description,licence;
-                        let tmp = [];
-                        let o = {};
+                    for(let i=0; i<sel.length; i++) {
 
-                        for(let i=0; i<sel.length; i++) {
+                        //if(tmp.indexOf(sel[i]) > -1) {
+                        //    _varia++;
+                        //    return; 
+                        //}
 
-                            tmp.push(sel[i]);
-                            let _tmp = tmp.shift();
+                        //console.log(tmp,sel[i]);
 
-                            o[_tmp] = {};
-                            o[_tmp].name = sel[i];
-                            console.log(colors.green('\nFunctionality : "'+o[_tmp].name)+'"');
-                            o[_tmp].description = promptSync('?'.bold.green+' Description (none): ');
-                            o[_tmp].developper = promptSync('?'.bold.green+' Developper (anon): ');
-                            o[_tmp].licence = promptSync('?'.bold.green+' Licence (none): ');
+                        //tmp.push(sel[i]);
+                        //let _tmp = tmp.shift();
+                        let _tmp = sel[i]; //is _tmp obsolete? TODO
 
-                            if(!o[_tmp].description) description = '(none)';
-                            if(!o[_tmp].developper) developper = '(anon)';
-                            if(!o[_tmp].licence) licence = '(none)';
 
-                            fs.writeFile(td+'/middlewares/'+o[_tmp].name+'.js', 
-                                    '/*\n'+
-                                       ' * Description : '+o[_tmp].description+'\n'+
-                                       ' * Author : '+o[_tmp].developper+'\n'+
-                                       ' * Licence : '+o[_tmp].licence+'\n'+
-                                       '*/\n\n'+
-                                    'module.exports = function(req, res, next) {'+
+                        o[_tmp] = {};
+                        o[_tmp].name = sel[i];
+                        console.log(colors.green('\nFunctionality : "'+o[_tmp].name)+'"');
+                        o[_tmp].description = promptSync('?'.bold.green+' Description (none): ');
+                        o[_tmp].developper = promptSync('?'.bold.green+' Developper (anon): ');
+                        o[_tmp].licence = promptSync('?'.bold.green+' Licence (none): ');
+
+                        if(!o[_tmp].description) description = '(none)';
+                        if(!o[_tmp].developper) developper = '(anon)';
+                        if(!o[_tmp].licence) licence = '(none)';
+
+                        fs.writeFile(td+'/middlewares/'+o[_tmp].name+'.js', 
+                                '/*\n'+
+                                   ' * Description : '+o[_tmp].description+'\n'+
+                                   ' * Author : '+o[_tmp].developper+'\n'+
+                                   ' * Licence : '+o[_tmp].licence+'\n'+
+                                   '*/\n\n'+
+                                'module.exports = function(req, res, next) {'+
+                                    '\n\t'+
                                         '\n\t'+
-                                            '\n\t'+
-                                            '\n\tnext();'+
-                                            '\n\t'+
-                                            '\n};', function(err) {
+                                        '\n\tnext();'+
+                                        '\n\t'+
+                                        '\n};', function(err) {
 
-                                                if(i === sel.length-1) {
-                                                    console.log();//important
-                                                    edition();
-                                                }
+                                            if(i === sel.length-1) {
+                                                console.log();//important
+                                                edition();
+                                            }
 
-                                            });
+                                        });
 
+                    }
+                }
+
+                function edition() {
+
+                    for(let i=0; i<sel.length; i++) {
+                        var confirmed = null;
+                        while (confirmed !== 'true' && confirmed !== 'false') {
+                            confirmed = promptSync('?'.bold.green+' Do you want to edit '+sel[i]+'.js'+' now? [true|false]: ');
+                        }
+
+                        if(confirmed === 'true') {
+                            var child = spawnSync(editor, [td+'/middlewares/'+sel[i]+'.js'], { 
+                                stdio: 'inherit'
+                            });
+                        } else {
+                            later.push(td+'/middlewares/'+sel[i]+'.js');
                         }
                     }
 
-                    function edition() {
-                        for(let i=0; i<sel.length; i++) {
-                            var confirmed = null;
-                            while (confirmed !== 'true' && confirmed !== 'false') {
-                                confirmed = promptSync('?'.bold.green+' Do you want to edit '+_sel[i]+'.js'+' now? [true|false]: ');
-                            }
+                    if(later && later.length) {
+                        console.log(colors.yellow('\n***Scripts you still have to edit***'));
+                        for(let u=0; u<later.length; u++) {
+                            console.log(colors.yellow(later[u]));
+                        }
+                        console.log();//important
+                    }
 
-                            if(confirmed === 'true') {
-                                var child = spawnSync(editor, [td+'/middlewares/'+_sel[i]+'.js'], { 
-                                    stdio: 'inherit'
+                    menu();
+
+                }
+
+                function remove_duplicates(arr) {
+                    var obj = {};
+                    var ret_arr = [];
+                    for (var i = 0; i < arr.length; i++) {
+                        obj[arr[i]] = true;
+                    }
+                    for (var key in obj) {
+                        ret_arr.push(key);
+                    }
+                    return ret_arr;
+                }
+
+                let menu = function() {
+                    ask({
+                        type: 'list',
+                        message : 'Do you want to add new fonctionalities?',
+                        choices: [
+                            'yes',
+                            'no'
+                        ],
+                        callback : function(answer) {
+                            if(answer === 'yes') {
+                                inquirer.prompt([{
+                                    type: 'input',
+                                    name: 'order',
+                                    message : 'Supply one or multiple functionalities name(s) separate by space',
+                                }]).then(function (resp) {
+                                    let _sel = remove_duplicates(resp.order.split(' '));
+
+                                    console.log();//important
+
+                                    //TODO handle backslashed expressions, like \t
+                                    var tmp = [];
+                                    for(let i=0; i<_sel.length; i++) {
+
+                                        if(_sel[i]) {
+
+                                            tmp.push(_sel[i]);
+                                            sel.push(_sel[i]);
+                                        }
+
+                                        if(tmp.length) {
+                                            var _tmp = tmp.shift();
+                                            var exist = false;
+
+                                            try {
+                                                exist = fs.statSync(td+'/middlewares/'+_tmp+'.js');
+                                            } catch(e) {
+                                                //do nothing
+                                            }
+
+                                            //IKI
+                                            if(exist) {
+                                                console.log(colors.yellow('File exists : '+td+'/middlewares/'+_tmp+'.js (unchanged)'));
+                                            } else {
+                                                console.log(colors.green('File creation : '+td+'/middlewares/'+_tmp+'.js'));
+                                            }
+                                        }
+
+                                        if(i === _sel.length-1) {
+                                            describe();
+                                        } 
+
+                                    }
+
                                 });
                             } else {
-                                later.push(td+'/middlewares/'+_sel[i]+'.js');
+                                methods.message('Service creation - Continue'.bold.green, function() {
+                                    history.shift();
+                                    methods.middleware.local.expose(td,'Service created');
+                                });
                             }
                         }
+                    });
+                }
 
-                        if(later && later.length) {
-                            console.log(colors.yellow('\n***Scripts you still have to edit***'));
-                            for(let u=0; u<later.length; u++) {
-                                console.log(colors.yellow(later[u]));
-                            }
-                            console.log();//important
-                        }
-
-                        methods.middleware.local.expose(td,'Service created');
-                        //AKI
-
-                    }
-
-                    console.log();//important
-
-                    //TODO handle backslashed expressions, like \t
-                    var tmp = [];
-                    for(let i=0; i<_sel.length; i++) {
-                        if(_sel[i]) {
-
-                            tmp.push(_sel[i]);
-                            sel.push(_sel[i]);
-                        }
-
-                        var _tmp = tmp.shift();
-                        var exist = false;
-
-                        try {
-                            exist = fs.statSync(td+'/middlewares/'+_tmp+'.js');
-                        } catch(e) {
-                            //do nothing
-                        }
-
-                        if(exist) {
-                            console.log(colors.yellow('File exists : '+td+'/middlewares/'+_tmp+'.js (unchanged)'));
-                        } else {
-                            console.log(colors.green('File creation : '+td+'/middlewares/'+_tmp+'.js'));
-                        }
-
-                        if(i === _sel.length-1) {
-                            describe();
-                        }
-                    }
-
-                });
+                menu();
 
             });
 
@@ -500,7 +608,15 @@ var methods = {
                             });
 
                             child.on('exit', function (e, code) {
-                                methods.message('Service '+answer+' has been removed!\n'+colors.yellow('Tips: check for calls of '+answer+'into the interface and delete them'), function() {
+                                let _config = require(td+'/config.json');
+
+                                var interface_warning = '';
+                                if(_config['static-content-enabled'] === 'true') {
+                                    interface_warning += colors.yellow('Tips: check for calls of '+answer+'into the interface and delete them');
+                                }
+
+                                //AKI
+                                methods.message('Service '+answer+' has been removed!\n'+interface_warning, function() {
                                     history.shift();
                                     methods.back();
                                 });
@@ -794,15 +910,13 @@ var methods = {
                     }
                 }
 
-                inquirer.prompt([{
+                ask({
                     type: 'list',
-                    name: 'method',
                     message : 'select a method',
-                    choices: ['get', 'post']
-                }]).then(function (answers) {
-
-                    return createRoute(answers,td);
-
+                    choices: ['get', 'post'],
+                    callback : function() {
+                        return createRoute(answers,td);
+                    }
                 }); 
 
             },
