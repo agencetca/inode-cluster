@@ -3,6 +3,7 @@
 //TODO autosave a copy of config.json files before writing them and restore things if anomalies exist (preserve atomicity)
 //TODO find a way to handle any internet interuption during node creation (that involve some downloads, i.e npm and bower install)
 //TODO Convert every exec by detached spawn
+//TODO Clean inused middleware in inodes (add cli menu entry for that)
 
 
 //Constant declaration
@@ -76,8 +77,8 @@ var select = {
                     'delete inode',
                     'manage configuration',
                     'manage interface',
-                    'manage functionalities',
-                    'manage routes',
+                    //'manage functionalities',
+                    //'manage routes',
                     'manage services'
                 ];
             }
@@ -202,6 +203,10 @@ var methods = {
     clean : {
         inode : {
             middlewares : function(td,auto) {
+
+                console.log('TODO : clean inode middlewares...');//TODO
+                return;
+
                 let tdm = td+'/middlewares';
                 let tdr = td+'/routes';
 
@@ -238,8 +243,6 @@ var methods = {
                                                         } else {
                                                             //TODO
                                                         }
-                                                        //console.log(fil[u].replace(pattern,''));
-                                                        //AKIKI
                                                     }
                                                 }
                                             }
@@ -250,18 +253,16 @@ var methods = {
 
                             });
 
+                        } else {
                         }
                     }
                 });
 
-                //IDAKIKI
             }
         },
     },
     services : {
         list : function(td) {
-            methods.clean.inode.middlewares(td);
-            return;
             return methods.item.list(td+'/routes/');
         },
         add : function(td) {
@@ -380,13 +381,13 @@ var methods = {
                 let menu = function() {
                     ask({
                         type: 'list',
-                        message : 'Do you want to add new fonctionalities?',
+                        message : 'Do you want to add new functionalities?',
                         choices: [
-                            'yes',
-                            'no'
+                            'yes, I want to create a new functionality from scratch',
+                            'no, I want to choose among existing functionalities'
                         ],
                         callback : function(answer) {
-                            if(answer === 'yes') {
+                            if(answer === 'yes, I want to create a new functionality from scratch') {
                                 inquirer.prompt([{
                                     type: 'input',
                                     name: 'order',
@@ -789,7 +790,6 @@ var methods = {
         local : {
             expose : function(td, custom_msg) {
 
-                //HERE
                 if (!fs.existsSync(td+'/middlewares/') || emptyDir.sync(td+'/middlewares/')) {
                     console.log('Create a middleware first'.red);
                     main();
@@ -797,7 +797,7 @@ var methods = {
                 }
 
                 var _route = {};
-                var createRoute = function(resp,td,back) {
+                var createRoute = function(td,back) {
 
                     if (!fs.existsSync(td+'/routes/')) {
                         mkdirp(td+'/routes/', function(err) { 
@@ -805,12 +805,12 @@ var methods = {
                         });
                     }
 
-                    _route.method = resp.method;
+                    //_route.method = resp.method;
 
-                    switch(resp.method) {
+                    //switch(resp.method) {
 
-                        case 'get':
-                        case 'post':
+                        //case 'get':
+                        //case 'post':
 
                             fs.readdir(td+'/middlewares/', function (err, files) {
 
@@ -825,7 +825,7 @@ var methods = {
 
                                 if(middlewares.length) {
 
-                                    inquirer.prompt([{
+                                inquirer.prompt([{
                                         type: 'checkbox',
                                         name: 'middlewares',
                                         message : 'Which middleware(s) do you want to expose?',
@@ -862,13 +862,20 @@ var methods = {
                                                 name: 'main',
                                                 message : 'Route name?',
                                                 default : _route.target 
+                                            },{
+                                                type: 'list',
+                                                name: 'method',
+                                                message : 'select a method [get|post default:get]',
+                                                choices : ['get','post'],
+                                                default : 'get', 
                                             }]).then(function (answers) {
 
-                                                overWrite(td+'/routes/'+answers.main+'-'+_route.method+'.js', function() {
-                                                    fs.writeFile(td+'/routes/'+answers.main+'-'+_route.method+'.js', ''+
+                                                overWrite(td+'/routes/'+answers.main+'-'+answers.method+'.js', function() {
+                                                    fs.writeFile(td+'/routes/'+answers.main+'-'+answers.method+'.js', ''+
                                                             'module.exports = function(app, config, middlewares) {'+
                                                                 '\n'+
-                                                                    '\n\tapp.'+_route.method+'("/'+answers.main+'", '+_route.targets+', function(req, res) {'+
+                                                                    '\n\tapp.'+answers.method+'("/'+answers.main+'", '
+                                                                            +_route.targets+', function(req, res) {'+
                                                                         '\n\n\t\tres.end();'+
                                                                             '\n\t});'+
                                                                     '\n'+
@@ -904,20 +911,29 @@ var methods = {
                             });
 
                             
-                            break;
-                        default:
-                            break;
-                    }
+                    //        break;
+                    //    default:
+                    //        throw(colors.red('Error with method : ' + resp.method + '\nAbort.'));
+                    //        break;
+                    //}
                 }
 
-                ask({
-                    type: 'list',
-                    message : 'select a method',
-                    choices: ['get', 'post'],
-                    callback : function() {
-                        return createRoute(answers,td);
-                    }
-                }); 
+
+                return createRoute(td);
+
+                //ask({
+                //    type: 'list',
+                //    message : 'select a method',
+                //    choices: ['get', 'post'],
+                //    callback : function(answer) {
+
+                //        let answers = {
+                //            method : answer
+                //        }
+
+                //        return createRoute(answers,td);
+                //    }
+                //}); 
 
             },
 
