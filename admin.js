@@ -79,7 +79,8 @@ var select = {
                     'manage interface',
                     //'manage functionalities',
                     //'manage routes',
-                    'manage services'
+                    'manage services',
+                    'manage internal javascript servers'
                 ];
             }
         },
@@ -194,7 +195,19 @@ var select = {
                 'edit service',
                 'remove service'
             ]
-        }
+        },
+
+        'manage internal javascript servers' : {
+            type: 'list',
+            message: 'Internal Javascript Servers',
+            choices: [
+                'list servers',
+                'view server',
+                'add server',
+                'edit server',
+                'remove server'
+            ]
+        },
 
     }
 };
@@ -258,6 +271,45 @@ var methods = {
                     }
                 });
 
+            }
+        },
+    },
+    servers : {
+        list : function(td) {
+            if (fs.existsSync(td+'/servers/third-part-servers')) {
+                return methods.item.list(td+'/servers/third-part-servers');
+            } else {
+                methods.message('Add server first.\nAbort.'.red, function() {
+                    methods.back();
+                });
+            }
+        },
+        view : function(td) {
+            if (!fs.existsSync(td+'/servers/third-part-servers')) {
+                methods.message('Add server first.\nAbort.'.red, function() {
+                    methods.back();
+                });
+            }
+        },
+        add : function(td) {
+            if (!fs.existsSync(td+'/servers/third-part-servers')) {
+                mkdirp(td+'/servers/third-part-servers', function(err) { 
+                    if (err) throw err;
+                });
+            }
+        },
+        edit : function(td) {
+            if (!fs.existsSync(td+'/servers/third-part-servers')) {
+                methods.message('Add server first.\nAbort.'.red, function() {
+                    methods.back();
+                });
+            }
+        },
+        remove : function(td) {
+            if (!fs.existsSync(td+'/servers/third-part-servers')) {
+                methods.message('Add server first.\nAbort.'.red, function() {
+                    methods.back();
+                });
             }
         },
     },
@@ -2221,6 +2273,21 @@ var methods = {
                            'remove service' : function(name) {
                             return methods.services.remove(target_dir+'/servers/'+name);
                            },
+                           'list servers' : function(name) {
+                            return methods.servers.list(target_dir+'/servers/'+name);
+                           },
+                           'view server' : function(name) {
+                            return methods.servers.view(target_dir+'/servers/'+name);
+                           },
+                           'add server' : function(name) {
+                            return methods.servers.add(target_dir+'/servers/'+name);
+                            },
+                           'edit server' : function(name) {
+                            return methods.servers.edit(target_dir+'/servers/'+name);
+                            },
+                           'remove server' : function(name) {
+                            return methods.servers.remove(target_dir+'/servers/'+name);
+                           },
     'routes' : function(name) {
         methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
             var sel = [];
@@ -2525,6 +2592,11 @@ var loadMenu = function() {
                 "Configure a node"
             ]);
         }
+
+        choice_menu = choice_menu.concat([
+                "Manage cluster configuration"
+        ]);
+
 
     } else if(isServer) {
         choice_menu = choice_menu.concat([
@@ -2902,6 +2974,10 @@ function main() {
 
                     cluster.stop();
 
+                    break;
+
+                case 'Manage cluster configuration':
+                    //ICI
                     break;
 
                 case 'Add a node':
