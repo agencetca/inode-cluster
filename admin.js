@@ -80,6 +80,7 @@ var select = {
                     //'manage functionalities',
                     //'manage routes',
                     'manage services',
+                    'manage linkage',
                     'manage internal javascript servers'
                 ];
             }
@@ -197,6 +198,18 @@ var select = {
             ]
         },
 
+        'manage linkage' : {
+            type: 'list',
+            message: 'Linkage',
+            choices: [
+                'list plugged inodes',
+                'view plugged inode',
+                'test plugged inode',
+                'plug external inode',
+                'unplug external inode'
+            ]
+        },
+
         'manage internal javascript servers' : {
             type: 'list',
             message: 'Internal Javascript Servers',
@@ -213,6 +226,97 @@ var select = {
 };
 
 var methods = {
+    linkage : {
+        list : function() {
+            console.log('linkage list');
+        },
+        view : function() {
+        },
+        test : function() {
+        },
+        plug : function(td) {
+
+            if(!config.servers || (!detect.servers.exist() && !detect.servers.disabled())) {
+                console.log('No servers available'.red);
+                main();
+                return;
+            }
+
+            let cluster_addr = target_dir;
+            let _config = require(cluster_addr+'/config.json');
+            let servers = [];
+
+            for (let i in _config.servers) {
+                if(i !== path.basename(td)) servers.push('inode '+i);
+            }
+
+            ask({
+                type: 'list',
+                message : 'Select an inode to plug',
+                choices: servers,
+                callback : function(choice) {
+
+                    let pattern = new RegExp('^inode ');
+                    let inode = choice.replace(pattern,'');
+
+                    ask({
+                        type: 'list',
+                        message : 'Which part of '+inode+' will you plug?',
+                        choices: [
+                            'plug interface',
+                            'plug service(s)'
+                        ],
+                        callback : function(choice) {
+
+                            let s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
+                            if(choice === 'plug interface') {
+
+                                if(s_conf['static-content-enabled'].toString() === 'true' && s_conf['static-entry-point']) {
+                                    //ICI
+                                    
+                                    overWrite(td+'/routes/inode-'+inode+'-connector.js', function() {
+                                        fs.writeFile(td+'/routes/inode-'+inode+'-connector.js', ''+
+                                                'const httpProxy = require("http-proxy");'+
+                                                '\nconst proxy = httpProxy.createProxyServer();'+
+                                                '\n\nmodule.exports = function(app, config, middlewares) {'+
+                                                    '\n'+
+
+                                                        '\n\tapp.get("/'+inode+'", function(req, res) {'+
+                                                        '\n'+
+                                                        '\n\t\tproxy.web(req, res, { target: "http://localhost:9000" });'+
+                                                        '\n'+
+                                                        '\n\t});'+
+                                                        '\n};'+
+                                                        '', function(err) {
+                                                            if(err) {
+                                                                return console.log(err);
+                                                            }
+
+                                                            //methods.message('', function() {
+                                                                methods.back();
+                                                            //});
+
+                                                        }); 
+                                    });
+
+
+                                } else {
+                                    methods.message(inode+' interface is misconfigured.\nAbort.'.red, function() {
+                                        methods.back();
+                                    });
+                                }
+                            } else {
+                            }
+                        }
+                    });
+
+                }
+            });
+
+        },
+        unplug : function() {
+        },
+    },
     clean : {
         inode : {
             middlewares : function(td,auto) {
@@ -1153,7 +1257,8 @@ var methods = {
                                                 name: 'local-method',
                                                 message : 'select a local method',
                                                 default: _route.method,
-                                                         choices: ['get', 'post']
+                                                choices: ['get', 'post']
+
                                             }]).then(function (answers) {
 
                                                 _route['local-name'] = answers['local-name'];
@@ -1461,7 +1566,7 @@ var methods = {
 
                     var _config = {};
 
-                        //ensure_cache(function() {
+                        ensure_cache(function() {
                         if (config) { 
                             if(config['port-range']) {
                                 if(config['port-range'].split && config['port-range'].split('-')) {
@@ -1733,14 +1838,22 @@ var methods = {
 
                                             });
                                         } else {
-                                            finalize_process();
+                                            //if(fs.existsSync(target_dir+'/servers/'+resp.name) && 
+                                            //        fs.existsSync(target_dir+'/servers/'+resp.name+'/package.json')) {
+                                            //    exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (error, stdout, stderr) => {
+                                            //        if(error) throw error;
+                                            //        finalize_process();
+                                            //    });
+                                            //} else {
+                                                finalize_process();
+                                            //}
                                         }
 
                                     });
                                 });
                             });
                         }); 
-                        //});
+                        });
 
         },
         configure : function() {
@@ -2273,6 +2386,21 @@ var methods = {
                            'remove service' : function(name) {
                             return methods.services.remove(target_dir+'/servers/'+name);
                            },
+                           'list plugged inodes' : function(name) {
+                           return methods.linkage.list(target_dir+'/servers/'+name);
+                           },
+                           'view plugged inode' : function(name) {
+                           return methods.linkage.view(target_dir+'/servers/'+name);
+                           },
+                           'test plugged inode' : function(name) {
+                           return methods.linkage.test(target_dir+'/servers/'+name);
+                           },
+                           'plug external inode' : function(name) {
+                           return methods.linkage.plug(target_dir+'/servers/'+name);
+                           },
+                           'unplug external inode' : function(name) {
+                           return methods.linkage.unplug(target_dir+'/servers/'+name);
+                           },
                            'list servers' : function(name) {
                             return methods.servers.list(target_dir+'/servers/'+name);
                            },
@@ -2610,6 +2738,17 @@ var loadMenu = function() {
 }
 
 //Cache Management
+//
+var cache_preinstall = function(cbk,bar) {
+    var cluster = spawn('npm',['install','--no-optional','--only=prod','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
+        stdio: 'ignore'
+    });
+    cluster.on('close', (code) => {
+        if(bar) bar.tick();
+        cbk(bar);
+    });
+}
+
 var build_cache = function(cbk,verbose) {
 
     isOnline(function(err, online) {
@@ -2637,13 +2776,9 @@ var build_cache = function(cbk,verbose) {
                     if(err) throw(err);
                 });
                 bar.tick();
-                var cluster = spawn('npm',['install','--no-optional','--only=prod','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
-                    stdio: 'inherit'
-                });
-                cluster.on('close', (code) => {
-                    bar.tick();
-                    launch(bar);
-                });
+
+                cache_preinstall(launch, bar);
+
                 execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git'+silent, (err, stdout, stderr) => {
                     if(err) throw(err);
                 });
@@ -2691,21 +2826,25 @@ var ensure_cache = function(cbk,verbose) {
             check = false;
         }
     }
+                
+    cache_preinstall(function() {
 
-    if(check === true) {
+        if(check === true) {
 
-        if(cbk) cbk(function(verbose) {
-            if(verbose) console.log('Cache is ready'.yellow);
-        },verbose);
-
-    } else {
-
-        build_cache(function() {
             if(cbk) cbk(function(verbose) {
                 if(verbose) console.log('Cache is ready'.yellow);
             },verbose);
-        }, verbose);
-    }
+
+        } else {
+
+            build_cache(function() {
+                if(cbk) cbk(function(verbose) {
+                    if(verbose) console.log('Cache is ready'.yellow);
+                },verbose);
+            }, verbose);
+        }
+
+    });
 
 }
 
@@ -2716,7 +2855,7 @@ var reset_cache = function(cbk, verbose) {
         confirmed = promptSync('?'.bold.green+colors.bold.red(' Confirm cache reset? [true|false]: '));
     }
 
-    if(confirmed === true) {
+    if(confirmed === 'true') {
         delete_cache(function() {
             build_cache(function() {
                 cbk();
@@ -2977,7 +3116,11 @@ function main() {
                     break;
 
                 case 'Manage cluster configuration':
-                    //ICI
+
+                    methods.message('Todo.\nAbort.'.red, function() {
+                        methods.back();
+                    });
+
                     break;
 
                 case 'Add a node':
