@@ -258,57 +258,47 @@ var methods = {
 
                     let pattern = new RegExp('^inode ');
                     let inode = choice.replace(pattern,'');
+                    let s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
 
-                    ask({
-                        type: 'list',
-                        message : 'Which part of '+inode+' will you plug?',
-                        choices: [
-                            'plug interface',
-                            'plug service(s)'
-                        ],
-                        callback : function(choice) {
+                    if(s_conf['static-content-enabled'].toString() === 'true' && s_conf['static-entry-point']) {
+                        //ICI
 
-                            let s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
-                            if(choice === 'plug interface') {
+                        overWrite(td+'/routes/inode-'+inode+'-connector.js', function() {
+                            fs.writeFile(td+'/routes/inode-'+inode+'-connector.js', ''+
+                                    'const httpProxy = require("http-proxy");'+
+                                    '\nconst proxy = httpProxy.createProxyServer();'+
+                                    '\n'+
+                                    '\nmodule.exports = function(app, config, middlewares) {'+
+                                        '\n'+
+                                            '\n\tapp.get("/'+inode+'/*", function(req, res) {'+
+                                            '\n\t\tvar pattern = new RegExp("^\/'+inode+'");'+
+                                            '\n\t\treq.url = req.url.replace(pattern,"");'+
+                                            '\n\t\tproxy.web(req, res, { target: "http://'+_config["servers"][inode]+'" });'+
+                                            '\n\t});'+
 
-                                if(s_conf['static-content-enabled'].toString() === 'true' && s_conf['static-entry-point']) {
-                                    //ICI
-                                    
-                                    overWrite(td+'/routes/inode-'+inode+'-connector.js', function() {
-                                        fs.writeFile(td+'/routes/inode-'+inode+'-connector.js', ''+
-                                                'const httpProxy = require("http-proxy");'+
-                                                '\nconst proxy = httpProxy.createProxyServer();'+
-                                                '\n\nmodule.exports = function(app, config, middlewares) {'+
-                                                    '\n'+
+                                        '\n'+
 
-                                                        '\n\tapp.get("/'+inode+'", function(req, res) {'+
-                                                        '\n'+
-                                                        '\n\t\tproxy.web(req, res, { target: "http://localhost:9000" });'+
-                                                        '\n'+
-                                                        '\n\t});'+
-                                                        '\n};'+
-                                                        '', function(err) {
-                                                            if(err) {
-                                                                return console.log(err);
-                                                            }
+                                            '\n\tapp.get("/'+inode+'", function(req, res) {'+
+                                            '\n\t\tres.redirect("/'+inode+'/");'+
+                                            '\n\t});'+
+                                        '\n'+
+                                        '\n}'+
+                                            '', function(err) {
+                                                if(err) {
+                                                    return console.log(err);
+                                                }
 
-                                                            //methods.message('', function() {
-                                                                methods.back();
-                                                            //});
+                                                methods.back();
 
-                                                        }); 
-                                    });
+                                            }); 
+                        });
 
 
-                                } else {
-                                    methods.message(inode+' interface is misconfigured.\nAbort.'.red, function() {
-                                        methods.back();
-                                    });
-                                }
-                            } else {
-                            }
-                        }
-                    });
+                    } else {
+                        methods.message(inode+' interface is misconfigured.\nAbort.'.red, function() {
+                            methods.back();
+                        });
+                    }
 
                 }
             });
