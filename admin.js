@@ -290,8 +290,15 @@ var methods = {
                                             '\n\t});'+
                                         '\n'+
                                             '\n\tapp.get("/'+inode+'/*", function(req, res) {'+
-                                            '\n\t\tproxy.web(req, res, { target: "http://'+_config["servers"][inode]+'" });'+
-                                                '\n\t\trequest.get("http://'+_config["servers"][inode]+'/'+inode+'").pipe(res);'+
+                                                '\n\t\tvar pattern = new RegExp("^/'+inode+'");'+
+                                                '\n\t\treq.url = req.url.replace(pattern,"");'+
+                                                '\n\t\trequest.get({url:"http://'+_config["servers"][inode]+'"+req.url, qs:req.query}).pipe(res);'+
+                                            '\n\t});'+
+                                        '\n'+
+                                            '\n\tapp.post("/'+inode+'/*", function(req, res) {'+
+                                                '\n\t\tvar pattern = new RegExp("^/'+inode+'");'+
+                                                '\n\t\treq.url = req.url.replace(pattern,"");'+
+                                                '\n\t\trequest.post("http://'+_config["servers"][inode]+'"+req.url).pipe(res);'+
                                             '\n\t});'+
                                         '\n'+
 
@@ -483,6 +490,8 @@ var methods = {
                                    '*/\n\n'+
                                 'module.exports = function(req, res, next) {'+
                                     '\n\t'+
+                                        '\n\tlet data = (Object.keys(req.body).length) ? req.body : req.query;'+
+                                        '\n\tlet method = (Object.keys(req.body).length) ? "post" : "get";'+
                                         '\n\t'+
                                         '\n\tnext();'+
                                         '\n\t'+
@@ -2972,7 +2981,8 @@ var cluster = {
                     if(code === 1) {
                         failed++;
                         methods.message(colors.red('Inode can\'t be started'), function() {
-                            });
+                            methods.back();
+                        });
                     }
 
                 });
