@@ -231,8 +231,10 @@ var methods = {
             console.log('linkage list');
         },
         view : function() {
+            console.log('linkage view');
         },
         test : function() {
+            console.log('linkage test');
         },
         plug : function(td) {
 
@@ -258,29 +260,41 @@ var methods = {
 
                     let pattern = new RegExp('^inode ');
                     let inode = choice.replace(pattern,'');
-                    let s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
+                    //let s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
 
-                    if(s_conf['static-content-enabled'].toString() === 'true' && s_conf['static-entry-point']) {
+                    //if(s_conf['static-content-enabled'].toString() === 'true') {
                         //ICI
+
+                        //if(!s_conf['static-entry-point']) {
+                        //    methods.message(inode+' interface is misconfigured : entry point is missing!\nAbort.'.red, function() {
+                        //        methods.back();
+                        //    });
+                        //} else {
 
                         overWrite(td+'/routes/inode-'+inode+'-connector.js', function() {
                             fs.writeFile(td+'/routes/inode-'+inode+'-connector.js', ''+
                                     'const httpProxy = require("http-proxy");'+
                                     '\nconst proxy = httpProxy.createProxyServer();'+
+                                    '\nconst request = require("request");'+
                                     '\n'+
                                     '\nmodule.exports = function(app, config, middlewares) {'+
                                         '\n'+
-                                            '\n\tapp.get("/'+inode+'/*", function(req, res) {'+
+                                            '\n\tapp.get("/'+inode+'$", function(req, res) {'+
+                                            '\n\t\tres.redirect("/'+inode+'/");'+
+                                            '\n\t});'+
+                                        '\n'+
+                                            '\n\tapp.get("/'+inode+'/", function(req, res) {'+
                                             '\n\t\tvar pattern = new RegExp("^\/'+inode+'");'+
                                             '\n\t\treq.url = req.url.replace(pattern,"");'+
                                             '\n\t\tproxy.web(req, res, { target: "http://'+_config["servers"][inode]+'" });'+
                                             '\n\t});'+
-
+                                        '\n'+
+                                            '\n\tapp.get("/'+inode+'/*", function(req, res) {'+
+                                            '\n\t\tproxy.web(req, res, { target: "http://'+_config["servers"][inode]+'" });'+
+                                                '\n\t\trequest.get("http://'+_config["servers"][inode]+'/'+inode+'").pipe(res);'+
+                                            '\n\t});'+
                                         '\n'+
 
-                                            '\n\tapp.get("/'+inode+'", function(req, res) {'+
-                                            '\n\t\tres.redirect("/'+inode+'/");'+
-                                            '\n\t});'+
                                         '\n'+
                                         '\n}'+
                                             '', function(err) {
@@ -294,17 +308,18 @@ var methods = {
                         });
 
 
-                    } else {
-                        methods.message(inode+' interface is misconfigured.\nAbort.'.red, function() {
-                            methods.back();
-                        });
-                    }
+
+                        //}
+
+
+                    //}
 
                 }
             });
 
         },
         unplug : function() {
+            //HERE
         },
     },
     clean : {
