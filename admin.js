@@ -78,7 +78,7 @@ var select = {
                     'manage configuration',
                     'manage interface',
                     //'manage functionalities',
-                    //'manage routes',
+                    'manage routes',
                     'manage services',
                     'manage linkage',
                     'manage internal javascript servers'
