@@ -19,6 +19,7 @@
     "request": "^2.78.0",
     "spawn-sync": "^1.0.15",
     "stripcolorcodes": "^0.1.0",
+    "sync-exec": "^0.6.2",
     "valid-url": "^1.0.9"
   }
 }

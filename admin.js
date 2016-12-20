@@ -18,7 +18,7 @@ const child_process = require('child_process');
 const request = require('request');
 const colors = require('colors');
 const exec = require('child_process').exec;
-const execSync = require('child_process').execSync;
+const execSync = require('sync-exec');
 const validUrl = require('valid-url');
 const promptSync = require('readline-sync').question;
 const portscanner = require('portscanner');
@@ -244,11 +244,11 @@ var methods = {
                 return;
             }
 
-            let cluster_addr = target_dir;
-            let _config = require(cluster_addr+'/config.json');
-            let servers = [];
+            var cluster_addr = target_dir;
+            var _config = require(cluster_addr+'/config.json');
+            var servers = [];
 
-            for (let i in _config.servers) {
+            for (var i in _config.servers) {
                 if(i !== path.basename(td)) servers.push('inode '+i);
             }
 
@@ -258,9 +258,9 @@ var methods = {
                 choices: servers,
                 callback : function(choice) {
 
-                    let pattern = new RegExp('^inode ');
-                    let inode = choice.replace(pattern,'');
-                    //let s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
+                    var pattern = new RegExp('^inode ');
+                    var inode = choice.replace(pattern,'');
+                    //var s_conf = require(cluster_addr+'/servers/'+inode+'/config.json');
 
                     //if(s_conf['static-content-enabled'].toString() === 'true') {
                         //ICI
@@ -336,16 +336,16 @@ var methods = {
                 console.log('TODO : clean inode middlewares...');//TODO
                 return;
 
-                let tdm = td+'/middlewares';
-                let tdr = td+'/routes';
+                var tdm = td+'/middlewares';
+                var tdr = td+'/routes';
 
-                let mid = {};
-                let rou = {};
+                var mid = {};
+                var rou = {};
 
-                let pattern = new RegExp('\.js$');
+                var pattern = new RegExp('\.js$');
 
                 fs.readdir(tdr, function (err, files) {
-                    for(let i=0; i<files.length; i++) {
+                    for(var i=0; i<files.length; i++) {
                         if(files[i].match(pattern)) {
 
                             fs.readFile(tdr+'/'+files[i], 'utf8', function (err,data) {
@@ -356,7 +356,7 @@ var methods = {
                                     rou[match] = 1;
                                     if(i === files.length-1) {
                                         fs.readdir(tdm, function (err, fil) {
-                                            for(let u=0; u<fil.length; u++) {
+                                            for(var u=0; u<fil.length; u++) {
                                                 if(rou[fil[u]] && fil[u].match(pattern)) {
                                                     if(!rou[fil[u].replace(pattern,'')]) {
                                                         if(auto !== false) {
@@ -435,11 +435,11 @@ var methods = {
         },
         add : function(td) {
 
-            let sel = [];
-            let later = [];
-            //let tmp = [];
-            let o = {};
-            let message = '';
+            var sel = [];
+            var later = [];
+            //var tmp = [];
+            var o = {};
+            var message = '';
 
             message += '*** Welcome to the service creator ***\n';
             message += 'A service is composed by one or multiple functionalities,\n';
@@ -457,7 +457,7 @@ var methods = {
 
                 function describe() {
 
-                    for(let i=0; i<sel.length; i++) {
+                    for(var i=0; i<sel.length; i++) {
 
                         //if(tmp.indexOf(sel[i]) > -1) {
                         //    _varia++;
@@ -467,8 +467,8 @@ var methods = {
                         //console.log(tmp,sel[i]);
 
                         //tmp.push(sel[i]);
-                        //let _tmp = tmp.shift();
-                        let _tmp = sel[i]; //is _tmp obsolete? TODO
+                        //var _tmp = tmp.shift();
+                        var _tmp = sel[i]; //is _tmp obsolete? TODO
 
 
                         o[_tmp] = {};
@@ -490,8 +490,8 @@ var methods = {
                                    '*/\n\n'+
                                 'module.exports = function(req, res, next) {'+
                                     '\n\t'+
-                                        '\n\tlet data = (Object.keys(req.body).length) ? req.body : req.query;'+
-                                        '\n\tlet method = (Object.keys(req.body).length) ? "post" : "get";'+
+                                        '\n\tvar data = (Object.keys(req.body).length) ? req.body : req.query;'+
+                                        '\n\tvar method = (Object.keys(req.body).length) ? "post" : "get";'+
                                         '\n\t'+
                                         '\n\tnext();'+
                                         '\n\t'+
@@ -509,7 +509,7 @@ var methods = {
 
                 function edition() {
 
-                    for(let i=0; i<sel.length; i++) {
+                    for(var i=0; i<sel.length; i++) {
                         var confirmed = null;
                         while (confirmed !== 'true' && confirmed !== 'false') {
                             confirmed = promptSync('?'.bold.green+' Do you want to edit '+sel[i]+'.js'+' now? [true|false]: ');
@@ -526,7 +526,7 @@ var methods = {
 
                     if(later && later.length) {
                         console.log(colors.yellow('\n***Scripts you still have to edit***'));
-                        for(let u=0; u<later.length; u++) {
+                        for(var u=0; u<later.length; u++) {
                             console.log(colors.yellow(later[u]));
                         }
                         console.log();//important
@@ -548,7 +548,7 @@ var methods = {
                     return ret_arr;
                 }
 
-                let menu = function() {
+                var menu = function() {
                     ask({
                         type: 'list',
                         message : 'Do you want to add new functionalities?',
@@ -563,13 +563,13 @@ var methods = {
                                     name: 'order',
                                     message : 'Supply one or multiple functionalities name(s) separate by space',
                                 }]).then(function (resp) {
-                                    let _sel = remove_duplicates(resp.order.split(' '));
+                                    var _sel = remove_duplicates(resp.order.split(' '));
 
                                     console.log();//important
 
                                     //TODO handle backslashed expressions, like \t
                                     var tmp = [];
-                                    for(let i=0; i<_sel.length; i++) {
+                                    for(var i=0; i<_sel.length; i++) {
 
                                         if(_sel[i]) {
 
@@ -622,7 +622,7 @@ var methods = {
             var pattern = new RegExp('.js$');
             var answers = [];
             fs.readdir(td+'/routes', function (err, files) {
-                for(let i=0; i<files.length; i++) {
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
                 }
 
@@ -650,7 +650,7 @@ var methods = {
                                         methods.back();
                                     });
                                 } else {
-                                    let matches = [];
+                                    var matches = [];
                                     fs.readFile(td+'/routes/'+answer+'.js', 'utf8', function (err,data) {
                                           if (err) {
                                                   return console.log(err);
@@ -690,7 +690,7 @@ var methods = {
             var pattern = new RegExp('.js$');
             var answers = [];
             fs.readdir(td+'/routes', function (err, files) {
-                for(let i=0; i<files.length; i++) {
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
                 }
 
@@ -718,7 +718,7 @@ var methods = {
                                         methods.back();
                                     });
                                 } else {
-                                    let matches = [];
+                                    var matches = [];
                                     fs.readFile(td+'/routes/'+answer+'.js', 'utf8', function (err,data) {
                                           if (err) {
                                                   return console.log(err);
@@ -757,7 +757,7 @@ var methods = {
             var pattern = new RegExp('.js$');
             var answers = [];
             fs.readdir(td+'/routes', function (err, files) {
-                for(let i=0; i<files.length; i++) {
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
                 }
 
@@ -779,7 +779,7 @@ var methods = {
                             });
 
                             child.on('exit', function (e, code) {
-                                let _config = require(td+'/config.json');
+                                var _config = require(td+'/config.json');
 
                                 var interface_warning = '';
                                 if(_config['static-content-enabled'] === 'true') {
@@ -812,9 +812,9 @@ var methods = {
 
             var readSync = function(){
 
-                let answers = [];
-                let files = fs.readdirSync(td);
-                for(let i=0; i<files.length; i++) {
+                var answers = [];
+                var files = fs.readdirSync(td);
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
                 }
 
@@ -850,7 +850,7 @@ var methods = {
             var pattern = new RegExp('.js$');
             var answer = '';
             fs.readdir(td, function (err, files) {
-                for(let i=0; i<files.length; i++) {
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answer += files[i].replace(pattern,'')+'\n';
                 }
 
@@ -866,9 +866,9 @@ var methods = {
 
             var readSync = function(){
 
-                let answers = [];
-                let files = fs.readdirSync(td);
-                for(let i=0; i<files.length; i++) {
+                var answers = [];
+                var files = fs.readdirSync(td);
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
                 }
 
@@ -906,9 +906,9 @@ var methods = {
 
             var readSync = function(){
 
-                let answers = [];
-                let files = fs.readdirSync(td);
-                for(let i=0; i<files.length; i++) {
+                var answers = [];
+                var files = fs.readdirSync(td);
+                for(var i=0; i<files.length; i++) {
                     if(files[i].match(pattern)) answers.push(files[i].replace(pattern,''));
                 }
 
@@ -1097,7 +1097,7 @@ var methods = {
                 //    choices: ['get', 'post'],
                 //    callback : function(answer) {
 
-                //        let answers = {
+                //        var answers = {
                 //            method : answer
                 //        }
 
@@ -1564,7 +1564,7 @@ var methods = {
                                         resp.description+'\nLicence : '+
                                         resp.licence +'*/\n" > '+
                                         target_dir+'/servers/third-part-servers/'+
-                                        resp.name+'.js', (error, stdout, stderr) => {
+                                        resp.name+'.js', function (error, stdout, stderr) {
 
                                             console.log('Execute '+editor+' '+target_dir+'/servers/third-part-servers/'+resp.name+'.js'); 
 
@@ -1785,7 +1785,7 @@ var methods = {
                                     });
 
                                     var asterisk = '*';//'coz vim sucks while editing this code
-                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,(error, stdout, stderr) => {
+                                    exec('mkdir '+target_dir+'/servers/'+resp.name+' && cp -rf '+cache_folder+'/'+github.repo["server-repo"]+'/'+asterisk+' '+target_dir+'/servers/'+resp.name,function (error, stdout, stderr) {
                                         if(error) console.log(error);
 
                                         _config.name = resp.name;
@@ -1814,7 +1814,7 @@ var methods = {
 
                                                 if (online) {
                                                     console.log('Cloning... ');
-                                                    clone(_config["static-origin"], { dest: static_abs_path }, [], (err) => {
+                                                    clone(_config["static-origin"], { dest: static_abs_path }, [], function (err) {
 
                                                         if (err) {
                                                             console.log('Cloning... error.'.red);
@@ -1828,11 +1828,11 @@ var methods = {
                                                                 if(path.basename(file) === _config['static-entry-point'] && fflag === 0) {
                                                                     fflag=1;
                                                                 } else if (path.basename(file) === 'bower.json') {
-                                                                    exec('cd '+path.dirname(file)+' && bower install', (error, stdout, stderr) => {
+                                                                    exec('cd '+path.dirname(file)+' && bower install', function (error, stdout, stderr) {
                                                                         if(error) throw error;
                                                                     });
                                                                 } else if (path.basename(file) === 'package.json') {
-                                                                    exec('cd '+path.dirname(file)+' && npm install', (error, stdout, stderr) => {
+                                                                    exec('cd '+path.dirname(file)+' && npm install', function (error, stdout, stderr) {
                                                                         if(error) throw error;
                                                                     });
                                                                 }
@@ -1854,7 +1854,7 @@ var methods = {
                                         } else {
                                             //if(fs.existsSync(target_dir+'/servers/'+resp.name) && 
                                             //        fs.existsSync(target_dir+'/servers/'+resp.name+'/package.json')) {
-                                            //    exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', (error, stdout, stderr) => {
+                                            //    exec('cd '+target_dir+'/servers/'+resp.name+' && npm install', function (error, stdout, stderr) {
                                             //        if(error) throw error;
                                             //        finalize_process();
                                             //    });
@@ -1891,7 +1891,7 @@ var methods = {
                             var active = Object.keys(config.servers);
                             var inactive = Object.keys(config.disabled);
 
-                            for (let i in inactive) {
+                            for (var i in inactive) {
                                 inactive[i] = colors.gray(inactive[i]);
                             }
 
@@ -2076,7 +2076,7 @@ var methods = {
                 resolve();
             } else if(files && files.length) {
 
-                for(let i=0; i<files.length; i++) {
+                for(var i=0; i<files.length; i++) {
                     isDirectory(uri+'/'+files[i], function(err, dir) {
                         if (err) throw err;
                         if(dir === true) {
@@ -2126,7 +2126,7 @@ var methods = {
 
         },
             'list-files-in-dir' : function(dir,cbk) {
-                fs.readdir(dir, (err, files) => {
+                fs.readdir(dir, function (err, files) {
                     cbk(files);
                 })
             },
@@ -2224,7 +2224,7 @@ var methods = {
                                             handle(files,p);
 
                             } else {
-                                for(let i=0; i<files.length; i++) {
+                                for(var i=0; i<files.length; i++) {
                                     isDirectory(p+'/'+files[i], function(err, dir) {
                                         if(dir) {
                                             files[i] = files[i].green;
@@ -2285,9 +2285,7 @@ var methods = {
                         if(_config['static-entry-point']) delete _config['static-entry-point'];
                         if(_config['static-origin']) delete _config['static-origin'];
                         if (fs.existsSync(uri+'/static')) {
-                            execSync('rm -rf '+uri+'/static', (err, stdout, stderr) => {
-                                if(err) throw(err);
-                            });
+                            execSync('rm -rf '+uri+'/static');
                         }
                         methods.message('Interface deleted', function() {
                             methods.back();
@@ -2434,7 +2432,7 @@ var methods = {
         methods['list-files-in-dir'](target_dir+'/servers/'+name+'/routes', function(files) {
             var sel = [];
             var pattern = new RegExp('.*\.js');
-            files.forEach(file => {
+            files.forEach(function(file) {
                 if(file.match(pattern)) sel.push(file);
             });
             ask({
@@ -2454,7 +2452,7 @@ var methods = {
         methods['list-files-in-dir'](target_dir+'/servers/'+name+'/middlewares', function(files) {
             var sel = [];
             var pattern = new RegExp('.*\.js');
-            files.forEach(file => {
+            files.forEach(function(file) {
                 if(file.match(pattern)) sel.push(file);
             });
             ask({
@@ -2498,7 +2496,7 @@ function ask(question) {
     if(question.choices && question.choices.push) {
 
         //TODO better solution for quick and dirty below : back appears twice and more on undetermined situation
-        let index = question.choices.indexOf('back');
+        var index = question.choices.indexOf('back');
         if(index > -1) {
             question.choices.splice(index, 1);
         }//end quick and dirty
@@ -2567,9 +2565,9 @@ var readArguments = function(cbk) {
 
         if(process.argv[2] === 'save') {
             var message = process.argv[3] || 'various (automated)';
-            exec('git add . && git commit -m "'+message+'" && git push -u origin master', (err, stdout, stderr) => {
+            exec('git add . && git commit -m "'+message+'" && git push -u origin master', function (err, stdout, stderr) {
                 if(err && err.code === 1) {
-                    exec('git push -u origin master', (err, stdout, stderr) => {
+                    exec('git push -u origin master', function (err, stdout, stderr) {
                         if(err) console.log(err.code);
                         if(cbk) cbk(args);
                     });
@@ -2757,7 +2755,7 @@ var cache_preinstall = function(cbk,bar) {
     var cluster = spawn('npm',['install','--no-optional','--only=prod','--prefix',cache_folder+'/'+github.repo["cluster-repo"]], {
         stdio: 'ignore'
     });
-    cluster.on('close', (code) => {
+    cluster.on('close', function (code) {
         if(bar) bar.tick();
         cbk(bar);
     });
@@ -2786,21 +2784,17 @@ var build_cache = function(cbk,verbose) {
 
                 var bar = new ProgressBar(':bar', { total : Object.keys(github.repo).length * 2});
                 var silent = '>/dev/null 2>&1';
-                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["cluster-repo"]+'.git'+silent, (err, stdout, stderr) => {
-                    if(err) throw(err);
-                });
+                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["cluster-repo"]+'.git'+silent);
                 bar.tick();
 
                 cache_preinstall(launch, bar);
 
-                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git'+silent, (err, stdout, stderr) => {
-                    if(err) throw(err);
-                });
+                execSync('cd '+cache_folder+' && git clone '+github.url+'/'+github.repo["server-repo"]+'.git'+silent);
                 bar.tick();
                 var server = spawn('npm',['install','--no-optional','--only=prod','--prefix',cache_folder+'/'+github.repo["server-repo"]], {
                     stdio: 'inherit'
                 });
-                server.on('close', (code) => {
+                server.on('close', function (code) {
                     bar.tick();
                     launch(bar);
                 });
@@ -2817,9 +2811,7 @@ var build_cache = function(cbk,verbose) {
 var delete_cache = function(cbk, verbose) {
     if (fs.existsSync(cache_folder)) { 
         var silent = '>/dev/null 2>&1';
-        execSync('rm -rf '+cache_folder, (err, stdout, stderr) => {
-            if(err) throw(err);
-        });
+        execSync('rm -rf '+cache_folder);
         if(verbose) console.log('Cache deleted!'.yellow);
         if(cbk) cbk();
     } else {
@@ -2835,7 +2827,7 @@ var ensure_cache = function(cbk,verbose) {
     var check = true;
     var repos = Object.keys(github.repo);
 
-    for (let i=0; i<repos.length; i++) {
+    for (var i=0; i<repos.length; i++) {
         if (!fs.existsSync(cache_folder+'/'+github.repo[repos[i]])) { 
             check = false;
         }
@@ -3042,7 +3034,7 @@ var cluster = {
         }
 
         while(run[config.name].length) {
-            exec('kill '+run[config.name].shift(), (err, stdout, stderr) => {
+            exec('kill '+run[config.name].shift(), function (err, stdout, stderr) {
                 //if(err) throw(err);
             });
         }
