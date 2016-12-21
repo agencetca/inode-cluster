@@ -2082,7 +2082,7 @@ var methods = {
                         if(dir === true) {
                             files[i] = files[i].bold.green;
                         } else {
-                            files[i] = files[i].yellow;
+                            files[i] = colors.yellow(files[i]);
                         }
                         if(i === files.length-1) {
                             resolve();
